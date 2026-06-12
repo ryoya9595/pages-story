@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { TitleScene } from "./scenes/TitleScene";
+import { OpeningScene } from "./scenes/OpeningScene";
 import { GameScene } from "./scenes/GameScene";
 
 // ?bg=1 でバックグラウンドタブでもループが回る（自動テスト・検証用）
@@ -22,7 +23,7 @@ const game = new Phaser.Game({
       debug: false,
     },
   },
-  scene: [TitleScene, GameScene],
+  scene: [TitleScene, OpeningScene, GameScene],
 });
 
 // デバッグ用（本番ビルドでは外す）

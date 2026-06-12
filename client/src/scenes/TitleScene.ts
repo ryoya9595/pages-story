@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { bgm } from "../bgm";
 import { getProfile, setProfile } from "../profile";
 import { ensureHeroVariantSheets } from "../pixelart";
+import { hasSeenOpening } from "./OpeningScene";
 
 // GameScene.heroVariant と同じ並び（見た目プレビュー用）
 const VARIANTS = [
@@ -68,6 +69,17 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.tweens.add({ targets: start, alpha: 0.35, duration: 700, yoyo: true, repeat: -1 });
+
+    // BGMクレジット（CC-BY 表記。公開時もゲーム内に出す約束）
+    this.add
+      .text(w / 2, h - 10, "BGM: Caketown / Woodland Fantasy by Matthew Pablo (CC-BY) ／ 背景: ansimuz (CC0)", {
+        fontSize: `${Math.min(11, Math.floor(w / 40))}px`,
+        color: "#fff8e7",
+        stroke: "#2b2118",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 1)
+      .setAlpha(0.85);
 
     this.input.once("pointerdown", () => {
       bgm.userGesture(); // 最初のタップでBGM開始（自動再生制限対策）
@@ -148,11 +160,27 @@ export class TitleScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     go.on("pointerdown", () => {
       setProfile({ name: name || "", charIdx });
-      this.scene.start("game");
+      // 初回プレイは先にオープニング、2回目以降はそのままゲームへ
+      this.scene.start(hasSeenOpening() ? "game" : "opening");
+    });
+
+    // はじまりのおはなし（再視聴）
+    const story = this.add
+      .text(w / 2, h * 0.85, "📖 はじまりのおはなしを みる", {
+        fontSize: "14px",
+        color: "#fff8e7",
+        backgroundColor: "#5a2d77cc",
+        padding: { x: 14, y: 7 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    story.on("pointerdown", () => {
+      setProfile({ name: name || "", charIdx });
+      this.scene.start("opening");
     });
 
     this.add
-      .text(w / 2, h * 0.85, "※なまえと見た目は あとからタイトルに戻れば変えられるよ", {
+      .text(w / 2, h * 0.93, "※なまえと見た目は あとからタイトルに戻れば変えられるよ", {
         fontSize: "12px",
         color: "#b9b3a8",
       })
