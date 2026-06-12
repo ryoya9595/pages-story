@@ -25,6 +25,9 @@ export class TouchControls {
   private healQueued = false;
   private healBtn?: Phaser.GameObjects.Arc;
   private healLabel?: Phaser.GameObjects.Text;
+  private sketchQueued = false;
+  private sketchBtn?: Phaser.GameObjects.Arc;
+  private sketchLabel?: Phaser.GameObjects.Text;
 
   private static readonly RADIUS = 60;
   private static readonly DEADZONE = 0.18;
@@ -97,6 +100,24 @@ export class TouchControls {
       this.healQueued = true;
     });
 
+    // とくぎ（スケッチ）ボタン。装備がある時だけ表示（setSketchVisible）
+    this.sketchBtn = scene.add
+      .circle(0, 0, 46, 0x7b3fa0, 0.22)
+      .setStrokeStyle(4, 0x7b3fa0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setInteractive(new Phaser.Geom.Circle(46, 46, 56), Phaser.Geom.Circle.Contains)
+      .setVisible(false);
+    this.sketchLabel = scene.add
+      .text(0, 0, "✨とくぎ", { fontSize: "18px", color: "#5a2d77", fontStyle: "bold" })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001)
+      .setVisible(false);
+    this.sketchBtn.on("pointerdown", () => {
+      this.sketchQueued = true;
+    });
+
     this.layout();
     scene.scale.on("resize", () => this.layout());
 
@@ -106,6 +127,9 @@ export class TouchControls {
         return;
       }
       if (this.attackBtn && Phaser.Math.Distance.Between(pointer.x, pointer.y, this.attackBtn.x, this.attackBtn.y) < 84) {
+        return;
+      }
+      if (this.sketchBtn?.visible && Phaser.Math.Distance.Between(pointer.x, pointer.y, this.sketchBtn.x, this.sketchBtn.y) < 84) {
         return;
       }
       if (this.stickPointerId !== null) return;
@@ -150,11 +174,18 @@ export class TouchControls {
     this.attackLabel?.setPosition(width - 196, height - 110);
     this.healBtn?.setPosition(width - 90, height - 312);
     this.healLabel?.setPosition(width - 90, height - 312);
+    this.sketchBtn?.setPosition(width - 196, height - 232);
+    this.sketchLabel?.setPosition(width - 196, height - 232);
   }
 
   setHealVisible(visible: boolean) {
     this.healBtn?.setVisible(visible && this.enabled);
     this.healLabel?.setVisible(visible && this.enabled);
+  }
+
+  setSketchVisible(visible: boolean) {
+    this.sketchBtn?.setVisible(visible && this.enabled);
+    this.sketchLabel?.setVisible(visible && this.enabled);
   }
 
   /** ジャンプ入力を1回分消費する */
@@ -176,5 +207,12 @@ export class TouchControls {
     const h = this.healQueued;
     this.healQueued = false;
     return h;
+  }
+
+  /** とくぎ（スケッチ）入力を1回分消費する */
+  consumeSketch(): boolean {
+    const s = this.sketchQueued;
+    this.sketchQueued = false;
+    return s;
   }
 }

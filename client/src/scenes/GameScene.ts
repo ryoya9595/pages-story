@@ -10,6 +10,7 @@ import { sfx } from "../sfx";
 import { getProfile } from "../profile";
 import { PROD_SERVER_HOST } from "../serverConfig";
 import { QUESTS } from "../../../shared/quests";
+import { SKETCHES, parseSketchBook, type SketchDef } from "../../../shared/sketches";
 import {
   JOBS,
   HEAL_COOLDOWN_MS,
@@ -72,7 +73,7 @@ export class GameScene extends Phaser.Scene {
   private collider?: Phaser.Physics.Arcade.Collider;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<"a" | "d" | "w" | "s" | "space" | "j" | "x" | "h", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"a" | "d" | "w" | "s" | "space" | "j" | "x" | "h" | "k", Phaser.Input.Keyboard.Key>;
   private jobOverlay?: Phaser.GameObjects.GameObject[];
   private lastHealAt = 0;
   private myLabelJob = "";
@@ -87,6 +88,9 @@ export class GameScene extends Phaser.Scene {
   private lastSent = { x: 0, y: 0, flip: false, anim: "idle" };
   private lastAttackAt = 0;
   private lastDoorAt = 0;
+  private lastSketchAt = 0; // とくぎ発動のクライアント側CT表示用
+  private sketchBtn?: Phaser.GameObjects.Text; // スケッチブックを開くボタン
+  private sketchOverlay?: Phaser.GameObjects.GameObject[];
 
   constructor() {
     super("game");
@@ -162,6 +166,7 @@ export class GameScene extends Phaser.Scene {
       j: this.input.keyboard!.addKey("J"),
       x: this.input.keyboard!.addKey("X"),
       h: this.input.keyboard!.addKey("H"),
+      k: this.input.keyboard!.addKey("K"),
     };
     this.touch = new TouchControls(this);
 
@@ -195,10 +200,25 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.spBtn.on("pointerdown", () => this.toggleSpPanel());
 
+    // スケッチブック（技コピー図鑑）を開くボタン。1つでも覚えたら表示
+    this.sketchBtn = this.add
+      .text(0, 0, "📕 スケッチ", {
+        fontSize: "14px",
+        color: "#ffffff",
+        backgroundColor: "#5a2d77ee",
+        padding: { x: 10, y: 6 },
+        fontStyle: "bold",
+      })
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    this.sketchBtn.on("pointerdown", () => this.toggleSketchBook());
+
     // PC向け操作ヒント
     if (!this.sys.game.device.input.touch) {
       this.add
-        .text(this.scale.width / 2, this.scale.height - 8, "←→/AD:いどう ␣:ジャンプ J/X:こうげき ↑↓:はしご H:かいふく", {
+        .text(this.scale.width / 2, this.scale.height - 8, "←→/AD:いどう ␣:ジャンプ J/X:こうげき K:とくぎ ↑↓:はしご H:かいふく", {
           fontSize: "11px",
           color: "#3a3530",
           backgroundColor: "#ffffff88",
@@ -698,6 +718,25 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // 技コピー: 発動演出（自分・他人どちらも）
+    room.onMessage("sketchCast", (m: { by: string; kind: string; type: string; x: number; y: number; flip: boolean }) => {
+      const def = SKETCHES[m.kind];
+      if (!def) return;
+      // 別マップの発動は描かない
+      const caster = m.by === room.sessionId ? this.me : this.remotes.get(m.by)?.sprite;
+      if (caster && (caster as any).visible === false) return;
+      this.sketchVfx(def.type, m.x, m.y, m.flip);
+    });
+
+    // 技コピー: 新しいスケッチを覚えた
+    room.onMessage("sketchLearned", (m: { sessionId: string; kind: string }) => {
+      if (m.sessionId !== room.sessionId) return;
+      const def = SKETCHES[m.kind];
+      if (!def) return;
+      this.banner(`✨ スケッチを おぼえた！\n${def.emoji}「${def.name}」`, "#f3e9ff", "#5a2d77");
+      sfx.questClear();
+    });
+
     room.onMessage("questAccepted", (m: { sessionId: string; questId: string }) => {
       if (m.sessionId !== room.sessionId || !this.me) return;
       const q = QUESTS[m.questId];
@@ -922,6 +961,17 @@ export class GameScene extends Phaser.Scene {
       this.spBtn.setVisible(has);
       if (has) this.spBtn.setText(`✨SP ${this.myState.sp}`);
     }
+
+    // スケッチボタン（1つでも覚えていたら表示。装備中の技名を出す）
+    if (this.sketchBtn) {
+      const known = parseSketchBook(this.myState.sketchBook).length;
+      this.sketchBtn.setVisible(known > 0);
+      const eq = SKETCHES[this.myState.equippedSketch];
+      this.sketchBtn.setText(eq ? `${eq.emoji}${eq.name}▼` : `📕スケッチ ${known}`);
+    }
+
+    // スマホのとくぎボタンは装備がある時だけ
+    this.touch.setSketchVisible(!!SKETCHES[this.myState.equippedSketch]);
   }
 
   private drawBars() {
@@ -947,6 +997,8 @@ export class GameScene extends Phaser.Scene {
       );
     }
     this.spBtn?.setPosition(x + w + 12, y - 2);
+    // スケッチボタンはSPの有無で段を変える（SPが出てたら下、無ければ上の段）
+    this.sketchBtn?.setPosition(x + w + 12, this.myState.sp > 0 ? y + 24 : y - 2);
   }
 
   /** SP振り分けパネル */
@@ -1025,6 +1077,137 @@ export class GameScene extends Phaser.Scene {
     objs.push(close);
 
     this.spPanel = objs;
+  }
+
+  /** スケッチブック（技コピー図鑑＝覚えた技から1つ装備する） */
+  private toggleSketchBook() {
+    if (this.sketchOverlay) {
+      for (const o of this.sketchOverlay) o.destroy();
+      this.sketchOverlay = undefined;
+      return;
+    }
+    this.closeSpPanelIfOpen();
+    const learned = parseSketchBook(this.myState.sketchBook);
+    const cx = this.scale.width / 2;
+    const top = 40;
+    const w = Math.min(this.scale.width - 24, 440);
+    const objs: Phaser.GameObjects.GameObject[] = [];
+
+    const backdrop = this.add
+      .rectangle(cx, this.scale.height / 2, this.scale.width, this.scale.height, 0x2a2438, 0.78)
+      .setScrollFactor(0).setDepth(4500).setInteractive();
+    objs.push(backdrop);
+
+    // 職業系統ごとのコピーの味付けヒント
+    let j = JOBS[this.myState.job];
+    while (j?.parent) j = JOBS[j.parent];
+    const root = j?.id ?? "novice";
+    const flavor: Record<string, string> = {
+      pencil: "✏️エンピツ系：とくぎの威力UP",
+      ink: "🖋️インク系：とくぎの射程・範囲UP",
+      crayon: "🖍️クレヨン系：とくぎ発動で自分にガード",
+      palette: "🎨パレット系：とくぎで周囲も回復",
+      novice: "転職するととくぎが系統別に変化するよ",
+    };
+    const head = this.add
+      .text(cx, top, `📕 スケッチブック\n${flavor[root] ?? flavor.novice}`, {
+        fontSize: "15px", color: "#fff8e7", align: "center", fontStyle: "bold",
+        wordWrap: { width: w - 20 },
+      })
+      .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501);
+    objs.push(head);
+
+    if (learned.length === 0) {
+      const none = this.add
+        .text(cx, top + 70, "まだ何も覚えていないよ。\n敵を倒すとスケッチを覚える！", {
+          fontSize: "14px", color: "#fff8e7", align: "center",
+        })
+        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501);
+      objs.push(none);
+    }
+
+    learned.forEach((kind, i) => {
+      const def = SKETCHES[kind];
+      if (!def) return;
+      const y = top + 64 + i * 60;
+      const isEq = this.myState.equippedSketch === kind;
+      const btn = this.add
+        .text(cx, y, `${isEq ? "▶ " : ""}${def.emoji} ${def.name}\n${def.desc}`, {
+          fontSize: "13px",
+          color: isEq ? "#fffbe6" : "#3a3530",
+          backgroundColor: isEq ? "#7b3fa0" : "#fff8e7",
+          padding: { x: 12, y: 8 },
+          wordWrap: { width: w - 40 },
+          fixedWidth: w,
+          align: "left",
+        })
+        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501)
+        .setInteractive({ useHandCursor: true });
+      btn.on("pointerdown", () => {
+        this.room?.send("equipSketch", { kind });
+        sfx.accept();
+        this.time.delayedCall(160, () => this.refreshSketchBook()); // サーバー反映を待って開き直す
+      });
+      objs.push(btn);
+    });
+
+    const close = this.add
+      .text(cx, this.scale.height - 44, "とじる", {
+        fontSize: "14px", color: "#fff8e7", backgroundColor: "#6b6257", padding: { x: 18, y: 7 },
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(4501)
+      .setInteractive({ useHandCursor: true });
+    close.on("pointerdown", () => this.toggleSketchBook());
+    objs.push(close);
+
+    this.sketchOverlay = objs;
+  }
+
+  /** 装備変更後にスケッチブックを開き直して反映 */
+  private refreshSketchBook() {
+    if (!this.sketchOverlay) return;
+    this.toggleSketchBook(); // 閉じる
+    this.toggleSketchBook(); // 開き直す
+  }
+
+  private closeSpPanelIfOpen() {
+    if (this.spPanel) {
+      for (const o of this.spPanel) o.destroy();
+      this.spPanel = undefined;
+    }
+  }
+
+  /** 技コピーの発動演出（タイプ別） */
+  private sketchVfx(type: string, x: number, y: number, flip: boolean) {
+    const dir = flip ? -1 : 1;
+    const D = 210;
+    if (type === "dash") {
+      const c = this.add.circle(x, y, 16, 0xffe08a, 0.9).setDepth(D);
+      this.tweens.add({ targets: c, x: x + dir * 130, angle: 720, alpha: 0, duration: 280, onComplete: () => c.destroy() });
+    } else if (type === "aoe") {
+      const ring = this.add.circle(x, y, 20, 0x4a2d6b, 0.45).setDepth(D);
+      this.tweens.add({ targets: ring, radius: 135, alpha: 0, duration: 380, onComplete: () => ring.destroy() });
+    } else if (type === "dot") {
+      for (let i = 0; i < 8; i++) {
+        const puff = this.add.circle(x + dir * (30 + Math.random() * 130), y - 20 + Math.random() * 40, 10 + Math.random() * 10, 0x8fbf6a, 0.6).setDepth(D);
+        this.tweens.add({ targets: puff, alpha: 0, y: puff.y - 16, duration: 1400 + Math.random() * 500, onComplete: () => puff.destroy() });
+      }
+    } else if (type === "stun") {
+      const press = this.add.rectangle(x + dir * 60, y, 90, 50, 0xffffff, 0.7).setDepth(D);
+      this.tweens.add({ targets: press, scaleX: 1.4, alpha: 0, duration: 260, onComplete: () => press.destroy() });
+      this.floatText("ドンッ！", x + dir * 70, y - 40, "#5a2d77", 16);
+    } else if (type === "sweep") {
+      const arc = this.add.ellipse(x + dir * 40, y, 60, 150, 0x222222, 0.5).setDepth(D);
+      this.tweens.add({ targets: arc, scaleX: 2.6, alpha: 0, x: x + dir * 110, duration: 280, onComplete: () => arc.destroy() });
+    } else if (type === "buff") {
+      const bub = this.add.circle(x, y - 6, 30, 0x6fd0ff, 0.3).setStrokeStyle(3, 0x3aa0e0, 0.8).setDepth(D);
+      this.tweens.add({ targets: bub, scale: 1.4, alpha: 0, duration: 900, onComplete: () => bub.destroy() });
+      this.floatText("🛡シールド", x, y - 50, "#2a72b0", 15);
+    } else if (type === "smash") {
+      const impact = this.add.star(x + dir * 70, y, 8, 14, 40, 0xffcaa0, 0.9).setDepth(D);
+      this.tweens.add({ targets: impact, scale: 2.2, alpha: 0, angle: 90, duration: 320, onComplete: () => impact.destroy() });
+      this.cameras.main.shake(140, 0.006);
+    }
   }
 
   /** 画面中央のお知らせバナー（クエスト受注・クリアなど） */
@@ -1194,6 +1377,15 @@ export class GameScene extends Phaser.Scene {
       this.lastHealAt = now;
       this.room.send("heal");
       sfx.heal();
+    }
+
+    // とくぎ＝技コピー発動（K / ✨とくぎボタン）。装備＆クールタイムを満たせば撃つ
+    const sketchPressed = Phaser.Input.Keyboard.JustDown(this.keys.k) || this.touch.consumeSketch();
+    const equipped = SKETCHES[this.myState.equippedSketch];
+    if (sketchPressed && equipped && now - this.lastSketchAt > equipped.cooldownMs) {
+      this.lastSketchAt = now;
+      this.room.send("castSketch");
+      sfx.swing();
     }
 
     // 扉（重なったら自動でページ移動。到着直後は一度ゾーンを出るまで発動しない）

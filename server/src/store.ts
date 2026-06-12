@@ -19,6 +19,9 @@ export interface PlayerRecord {
   statAtk?: number;
   statHp?: number;
   statSpd?: number;
+  statSpec?: number;
+  sketchBook?: string;
+  equippedSketch?: string;
   colorIdx?: number;
   updatedAt: number;
 }

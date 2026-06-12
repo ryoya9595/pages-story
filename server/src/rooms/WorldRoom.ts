@@ -26,6 +26,14 @@ import {
   isHealer,
   availableJobs,
 } from "../../../shared/jobs.js";
+import {
+  SKETCHES,
+  sketchJobMod,
+  SHIELD_DMG_MUL,
+  hasSketch,
+  addSketch,
+  type SketchDef,
+} from "../../../shared/sketches.js";
 
 export class Player extends Schema {
   @type("number") x = 0;
@@ -51,6 +59,9 @@ export class Player extends Schema {
   @type("number") statHp = 0;
   @type("number") statSpd = 0;
   @type("number") statSpec = 0; // 職業系統ごとの固有強化（リーチ/飛距離/防御/回復量）
+  // 技コピー（スケッチ）: 覚えた図鑑（"makimaki,inkdama"形式）と装備中の1つ
+  @type("string") sketchBook = "";
+  @type("string") equippedSketch = "";
 }
 
 export class Enemy extends Schema {
@@ -88,6 +99,7 @@ interface EnemyMeta {
   dir: 1 | -1;
   respawnAt: number;
   touchCooldown: Map<string, number>;
+  stunnedUntil: number; // けしゴムプレス等でスタン中はこの時刻まで動かない
 }
 
 export class WorldRoom extends Room<WorldState> {
@@ -102,6 +114,10 @@ export class WorldRoom extends Room<WorldState> {
   private lastDamagedAt = new Map<string, number>();
   private healCooldown = new Map<string, number>();
   private lastRegenAt = 0;
+  /** スケッチ発動のクールタイム（sessionId -> 解放時刻） */
+  private sketchCooldown = new Map<string, number>();
+  /** 防御バフ中の終了時刻（sessionId -> 時刻）。えのぐシールド/クレヨン系発動で付く */
+  private shieldUntil = new Map<string, number>();
 
   onCreate() {
     this.setState(new WorldState());
@@ -156,6 +172,20 @@ export class WorldRoom extends Room<WorldState> {
       });
       this.broadcast("healed", { by: client.sessionId, x: p.x, y: p.y, targets });
     });
+
+    // ===== 技コピー（スケッチ） =====
+    // 装備変更: 覚えているスケッチを1つアクティブにする
+    this.onMessage("equipSketch", (client: Client, data: { kind: string }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      const kind = data?.kind ?? "";
+      if (kind !== "" && !hasSketch(p.sketchBook, kind)) return; // 覚えていないものは装備不可
+      p.equippedSketch = kind;
+      this.savePlayer(client.sessionId, p);
+    });
+
+    // 発動: 装備中スケッチを撃つ
+    this.onMessage("castSketch", (client: Client) => this.handleCastSketch(client));
 
     // 開発用チート（ALLOW_DEV=1 のときだけ有効。バランステスト用）
     if (process.env.ALLOW_DEV) {
@@ -241,7 +271,7 @@ export class WorldRoom extends Room<WorldState> {
         e.hp = stats.maxHp;
         e.maxHp = stats.maxHp;
         this.state.enemies.set(def.id, e);
-        this.enemyMeta.set(def.id, { def, dir: 1, respawnAt: 0, touchCooldown: new Map() });
+        this.enemyMeta.set(def.id, { def, dir: 1, respawnAt: 0, touchCooldown: new Map(), stunnedUntil: 0 });
       }
     }
   }
@@ -312,9 +342,102 @@ export class WorldRoom extends Room<WorldState> {
         const gain = Math.max(1, Math.round(baseExp * weight * bonus));
         this.giveExp(c.sessionId, c.player, gain);
         this.progressQuest(c.sessionId, c.player, enemy);
+        this.learnSketch(c.sessionId, c.player, enemy.kind);
       }
     }
     this.contrib.delete(enemyId);
+  }
+
+  /** その敵の種類のスケッチを初めて倒したら覚える（図鑑式） */
+  private learnSketch(sessionId: string, p: Player, kind: string) {
+    if (!SKETCHES[kind] || hasSketch(p.sketchBook, kind)) return;
+    p.sketchBook = addSketch(p.sketchBook, kind);
+    // 1つも装備していなければ自動で装備（初めて覚えた技をすぐ使えるように）
+    if (!p.equippedSketch) p.equippedSketch = kind;
+    this.broadcast("sketchLearned", { sessionId, kind });
+    this.savePlayer(sessionId, p);
+  }
+
+  private handleCastSketch(client: Client) {
+    const p = this.state.players.get(client.sessionId);
+    if (!p || p.dead) return;
+    const def = SKETCHES[p.equippedSketch];
+    if (!def || !hasSketch(p.sketchBook, def.kind)) return;
+    const now = Date.now();
+    if (now < (this.sketchCooldown.get(client.sessionId) || 0)) return;
+    this.sketchCooldown.set(client.sessionId, now + def.cooldownMs);
+
+    const mod = sketchJobMod(this.rootJob(p.job));
+    const dir: 1 | -1 = p.flip ? -1 : 1;
+
+    // 職業系統のオマケ: クレヨン=自己ガード / パレット=周囲回復
+    if (mod.selfShieldMs > 0) this.shieldUntil.set(client.sessionId, now + mod.selfShieldMs);
+    if (mod.allyHealRatio > 0) {
+      this.state.players.forEach((ally) => {
+        if (ally.dead || ally.mapId !== p.mapId) return;
+        if (Math.abs(ally.x - p.x) > HEAL_RADIUS || Math.abs(ally.y - p.y) > HEAL_RADIUS) return;
+        ally.hp = Math.min(ally.maxHp, ally.hp + Math.round(ally.maxHp * mod.allyHealRatio));
+      });
+    }
+
+    // 演出用ブロードキャスト
+    this.broadcast("sketchCast", { by: client.sessionId, kind: def.kind, type: def.type, x: p.x, y: p.y, flip: p.flip });
+
+    if (def.type === "buff") return; // えのぐシールドは攻撃しない（mod適用は上で完結、自分にもシールド）
+
+    const dmg = Math.max(1, Math.round(playerAtk(p.level) * def.dmgMul * (1 + p.statAtk * 0.04) * mod.dmgMul));
+    const rangeX = def.rangeX * mod.rangeMul;
+    const rangeY = def.rangeY * mod.rangeMul;
+    const stunMs = def.type === "stun" ? def.durationMs || 0 : 0;
+
+    if (def.type === "dot" && def.ticks && def.durationMs) {
+      // 胞子の雲: 一定間隔で複数回ヒット
+      const interval = def.durationMs / def.ticks;
+      for (let i = 0; i < def.ticks; i++) {
+        this.clock.setTimeout(() => {
+          const pl = this.state.players.get(client.sessionId);
+          if (!pl || pl.dead) return;
+          this.sketchHitArea(client.sessionId, pl, def, dir, rangeX, rangeY, dmg, 0);
+        }, Math.round(interval * i));
+      }
+      return;
+    }
+
+    this.sketchHitArea(client.sessionId, p, def, dir, rangeX, rangeY, dmg, stunMs);
+  }
+
+  /** スケッチの当たり判定＆ダメージ適用（aoeは自分中心、他は前方ボックス） */
+  private sketchHitArea(
+    sessionId: string, p: Player, def: SketchDef, dir: 1 | -1,
+    rangeX: number, rangeY: number, dmg: number, stunMs: number
+  ) {
+    const now = Date.now();
+    this.state.enemies.forEach((e, id) => {
+      if (e.dead || e.mapId !== p.mapId) return;
+      let inRange: boolean;
+      if (def.type === "aoe") {
+        inRange = Math.abs(e.x - p.x) <= rangeX && Math.abs(e.y - p.y) <= rangeY;
+      } else {
+        const forward = dir * (e.x - p.x);
+        inRange = forward >= -20 && forward <= rangeX && Math.abs(e.y - p.y) <= rangeY;
+      }
+      if (!inRange) return;
+
+      e.hp = Math.max(0, e.hp - dmg);
+      let c = this.contrib.get(id);
+      if (!c) { c = new Map(); this.contrib.set(id, c); }
+      c.set(sessionId, (c.get(sessionId) || 0) + dmg);
+      this.broadcast("hit", { enemyId: id, dmg, by: sessionId, x: e.x, y: e.y });
+
+      if (stunMs > 0) {
+        const meta = this.enemyMeta.get(id);
+        if (meta) {
+          meta.stunnedUntil = now + stunMs;
+          e.x = Math.max(0, Math.min(MAPS[e.mapId].width, e.x + dir * 40)); // ノックバック
+        }
+      }
+      if (e.hp <= 0) this.killEnemy(id, e);
+    });
   }
 
   /** 討伐がクエスト対象ならカウントを進め、達成なら報酬＆次のクエストへ */
@@ -378,14 +501,20 @@ export class WorldRoom extends Room<WorldState> {
         return;
       }
 
+      // スタン中（けしゴムプレス等）は動かず・触れてもダメージを出さない
+      const stunned = now < meta.stunnedUntil;
+
       // パトロール移動
       const stats = enemyStats(e.level, e.boss);
-      e.x += meta.dir * stats.speed * dt;
-      if (e.x >= meta.def.patrolMax) meta.dir = -1;
-      if (e.x <= meta.def.patrolMin) meta.dir = 1;
-      e.flip = meta.dir < 0;
+      if (!stunned) {
+        e.x += meta.dir * stats.speed * dt;
+        if (e.x >= meta.def.patrolMax) meta.dir = -1;
+        if (e.x <= meta.def.patrolMin) meta.dir = 1;
+        e.flip = meta.dir < 0;
+      }
 
-      // 触れたプレイヤーにダメージ（タッチダメージ）
+      // 触れたプレイヤーにダメージ（タッチダメージ。スタン中は無し）
+      if (stunned) return;
       this.state.players.forEach((p, sessionId) => {
         if (p.dead || p.mapId !== e.mapId) return;
         if (Math.abs(p.x - e.x) > TOUCH_RANGE_X || Math.abs(p.y - e.y) > TOUCH_RANGE_Y) return;
@@ -397,6 +526,10 @@ export class WorldRoom extends Room<WorldState> {
         let dmgTaken = stats.touchDmg;
         if (this.rootJob(p.job) === "crayon") {
           dmgTaken = Math.max(1, Math.round(dmgTaken * (1 - p.statSpec * 0.03)));
+        }
+        // スケッチの防御バフ（えのぐシールド／クレヨン系の発動ガード）中は半減
+        if (now < (this.shieldUntil.get(sessionId) || 0)) {
+          dmgTaken = Math.max(1, Math.round(dmgTaken * SHIELD_DMG_MUL));
         }
         p.hp = Math.max(0, p.hp - dmgTaken);
         this.lastDamagedAt.set(sessionId, now);
@@ -468,6 +601,8 @@ export class WorldRoom extends Room<WorldState> {
       p.statHp = existing.statHp ?? 0;
       p.statSpd = existing.statSpd ?? 0;
       p.statSpec = (existing as any).statSpec ?? 0;
+      p.sketchBook = (existing as any).sketchBook ?? "";
+      p.equippedSketch = (existing as any).equippedSketch ?? "";
       p.expToNext = expToNext(p.level);
       p.maxHp = this.calcMaxHp(p);
       p.hp = p.maxHp;
@@ -514,6 +649,8 @@ export class WorldRoom extends Room<WorldState> {
       statHp: p.statHp,
       statSpd: p.statSpd,
       statSpec: p.statSpec,
+      sketchBook: p.sketchBook,
+      equippedSketch: p.equippedSketch,
       colorIdx: p.colorIdx,
       updatedAt: Date.now(),
     });
@@ -531,6 +668,8 @@ export class WorldRoom extends Room<WorldState> {
     this.playerIds.delete(client.sessionId);
     this.secrets.delete(client.sessionId);
     this.lastDamagedAt.delete(client.sessionId);
+    this.sketchCooldown.delete(client.sessionId);
+    this.shieldUntil.delete(client.sessionId);
     store.flush();
   }
 
