@@ -1,0 +1,25 @@
+# PAGESストーリー サーバー（Colyseus）fly.io 設定
+# app名は `fly launch` 時に確定する。下の "pages-story-server" は希望名（重複してたら変わる）。
+app = "pages-story-server"
+primary_region = "nrt"  # 東京（日本のプレイヤー向けに低遅延）
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 2567
+  force_https = true
+  # WebSocket常時接続のゲームなので、アイドルでもサーバーを止めない
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+
+# セーブデータ(players.json)を永続化する3GB無料ボリューム。
+# 事前に: fly volumes create pages_data --size 1 --region nrt
+[mounts]
+  source = "pages_data"
+  destination = "/data"

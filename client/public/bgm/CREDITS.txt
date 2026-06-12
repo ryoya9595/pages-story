@@ -1,0 +1,4 @@
+BGMクレジット（公開時はゲーム内クレジットにも記載すること）
+- field.mp3: "Caketown" by Matthew Pablo (CC-BY-SA 3.0) https://opengameart.org/content/caketown-cuteplayful
+- forest.mp3: "Woodland Fantasy" by Matthew Pablo (CC-BY 3.0) https://opengameart.org/content/woodland-fantasy
+  Matthew Pablo: http://www.matthewpablo.com

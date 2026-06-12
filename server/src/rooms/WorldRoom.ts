@@ -1,0 +1,541 @@
+import { Room, Client } from "colyseus";
+import { Schema, MapSchema, type } from "@colyseus/schema";
+import {
+  MAPS,
+  enemyStats,
+  playerMaxHp,
+  playerAtk,
+  expToNext,
+  LEVEL_CAP,
+  PARTY_BONUS,
+  CONTRIB_WEIGHT,
+  LEVEL_WEIGHT,
+  type EnemySpawnDef,
+} from "../../../shared/maps.js";
+import { store } from "../store.js";
+import { QUESTS, FIRST_QUEST } from "../../../shared/quests.js";
+import {
+  JOBS,
+  RANGED_ATTACK_X,
+  RANGED_ATTACK_Y,
+  HEAL_RADIUS,
+  HEAL_COOLDOWN_MS,
+  jobAtkMul,
+  jobHpMul,
+  jobHealRatio,
+  isHealer,
+  availableJobs,
+} from "../../../shared/jobs.js";
+
+export class Player extends Schema {
+  @type("number") x = 0;
+  @type("number") y = 0;
+  @type("boolean") flip = false;
+  @type("string") anim = "idle";
+  @type("number") colorIdx = 0;
+  @type("string") name = "";
+  @type("string") mapId = "hub";
+  @type("number") level = 1;
+  @type("number") exp = 0;
+  @type("number") expToNext = expToNext(1);
+  @type("number") hp = playerMaxHp(1);
+  @type("number") maxHp = playerMaxHp(1);
+  @type("boolean") dead = false;
+  @type("string") questId = FIRST_QUEST;
+  @type("number") questProgress = 0;
+  @type("string") questPhase = "idle"; // idle=未受注 / active=進行中 / ready=報告待ち
+  @type("string") job = "novice";
+  // スキルポイント（レベルアップごとに+3。ステータスに振る）
+  @type("number") sp = 0;
+  @type("number") statAtk = 0;
+  @type("number") statHp = 0;
+  @type("number") statSpd = 0;
+  @type("number") statSpec = 0; // 職業系統ごとの固有強化（リーチ/飛距離/防御/回復量）
+}
+
+export class Enemy extends Schema {
+  @type("string") kind = "makimaki";
+  @type("string") mapId = "hub";
+  @type("number") level = 1;
+  @type("number") x = 0;
+  @type("number") y = 0;
+  @type("boolean") flip = false;
+  @type("number") hp = 1;
+  @type("number") maxHp = 1;
+  @type("boolean") dead = false;
+  @type("boolean") boss = false;
+}
+
+export class WorldState extends Schema {
+  @type({ map: Player }) players = new MapSchema<Player>();
+  @type({ map: Enemy }) enemies = new MapSchema<Enemy>();
+}
+
+const ATTACK_RANGE_X = 80; // 前方リーチ
+const ATTACK_BACK_X = 24; // 背面の許容
+const ATTACK_RANGE_Y = 60;
+const TOUCH_RANGE_X = 34;
+const TOUCH_RANGE_Y = 44;
+const TOUCH_COOLDOWN_MS = 1000;
+const ENEMY_RESPAWN_MS = 6000;
+const PLAYER_RESPAWN_MS = 3000;
+const REGEN_INTERVAL_MS = 1000;
+const REGEN_AFTER_DAMAGE_MS = 5000; // 被弾後この時間は回復しない
+const AUTOSAVE_INTERVAL_MS = 15000;
+
+interface EnemyMeta {
+  def: EnemySpawnDef;
+  dir: 1 | -1;
+  respawnAt: number;
+  touchCooldown: Map<string, number>;
+}
+
+export class WorldRoom extends Room<WorldState> {
+  maxClients = 4;
+
+  private enemyMeta = new Map<string, EnemyMeta>();
+  /** enemyId -> (sessionId -> 与ダメージ累計) 経験値分配用 */
+  private contrib = new Map<string, Map<string, number>>();
+  /** sessionId -> playerId / secret（セーブ用） */
+  private playerIds = new Map<string, string>();
+  private secrets = new Map<string, string>();
+  private lastDamagedAt = new Map<string, number>();
+  private healCooldown = new Map<string, number>();
+  private lastRegenAt = 0;
+
+  onCreate() {
+    this.setState(new WorldState());
+    this.spawnAllEnemies();
+
+    this.onMessage("move", (client: Client, data: { x: number; y: number; flip: boolean; anim: string }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead) return;
+      const map = MAPS[p.mapId];
+      p.x = Math.max(0, Math.min(map.width, Number(data.x) || 0));
+      p.y = Math.max(0, Math.min(map.height, Number(data.y) || 0));
+      p.flip = !!data.flip;
+      p.anim = typeof data.anim === "string" ? data.anim : "idle";
+    });
+
+    this.onMessage("attack", (client: Client) => this.handleAttack(client));
+
+    // 転職（1次Lv10→2次Lv30→3次Lv60→4次Lv90。親職からの派生のみ・後戻り不可）
+    this.onMessage("chooseJob", (client: Client, data: { job: string }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead) return;
+      const target = JOBS[data?.job];
+      if (!target) return;
+      if (!availableJobs(p.job, p.level).some((j) => j.id === target.id)) return;
+      p.job = target.id;
+      p.maxHp = this.calcMaxHp(p);
+      p.hp = p.maxHp; // 転職祝いの全回復
+      this.savePlayer(client.sessionId, p);
+      this.broadcast("jobChosen", { sessionId: client.sessionId, job: p.job });
+      console.log(`[job] ${p.name} → ${target.name}（${target.tier}次）`);
+    });
+
+    // パレット系の回復（自分＋周囲の仲間）
+    this.onMessage("heal", (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead || !isHealer(p.job)) return;
+      const now = Date.now();
+      if (now < (this.healCooldown.get(client.sessionId) || 0)) return;
+      this.healCooldown.set(client.sessionId, now + HEAL_COOLDOWN_MS);
+
+      const targets: { sessionId: string; amount: number }[] = [];
+      this.state.players.forEach((ally, sessionId) => {
+        if (ally.dead || ally.mapId !== p.mapId) return;
+        if (Math.abs(ally.x - p.x) > HEAL_RADIUS || Math.abs(ally.y - p.y) > HEAL_RADIUS) return;
+        // パレット系の固有強化: 回復量+1.2%/pt
+        const ratio = jobHealRatio(p.job) + (this.rootJob(p.job) === "palette" ? p.statSpec * 0.012 : 0);
+        const amount = Math.round(ally.maxHp * ratio);
+        const healed = Math.min(ally.maxHp - ally.hp, amount);
+        if (healed <= 0) return;
+        ally.hp += healed;
+        targets.push({ sessionId, amount: healed });
+      });
+      this.broadcast("healed", { by: client.sessionId, x: p.x, y: p.y, targets });
+    });
+
+    // 開発用チート（ALLOW_DEV=1 のときだけ有効。バランステスト用）
+    if (process.env.ALLOW_DEV) {
+      this.onMessage("devGrantExp", (client: Client, data: { amount: number }) => {
+        const p = this.state.players.get(client.sessionId);
+        if (!p) return;
+        this.giveExp(client.sessionId, p, Math.max(0, Math.min(100000, Number(data?.amount) || 0)));
+      });
+    }
+
+    this.onMessage("enterDoor", (client: Client, data: { doorId: string }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead) return;
+      const door = MAPS[p.mapId]?.doors.find((d) => d.id === data?.doorId);
+      if (!door) return;
+      if (Math.abs(p.x - door.x) > 90 || Math.abs(p.y - door.y) > 120) return; // 扉の近くにいる時だけ
+      p.mapId = door.toMap;
+      p.x = door.toX;
+      p.y = door.toY;
+    });
+
+    // クエスト受注（しおりの妖精に話しかけて受ける）
+    this.onMessage("acceptQuest", (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead) return;
+      if (p.questPhase !== "idle" || !QUESTS[p.questId]) return;
+      p.questPhase = "active";
+      p.questProgress = 0;
+      this.broadcast("questAccepted", { sessionId: client.sessionId, questId: p.questId });
+      this.savePlayer(client.sessionId, p);
+    });
+
+    // クエスト報告（達成後にしおりの妖精へ → 報酬）
+    this.onMessage("claimQuest", (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead) return;
+      const quest = QUESTS[p.questId];
+      if (p.questPhase !== "ready" || !quest) return;
+      this.broadcast("questClear", { sessionId: client.sessionId, questId: quest.id, rewardExp: quest.rewardExp });
+      this.giveExp(client.sessionId, p, quest.rewardExp);
+      p.questId = quest.next ?? "";
+      p.questPhase = "idle";
+      p.questProgress = 0;
+      this.savePlayer(client.sessionId, p);
+    });
+
+    // スキルポイント振り分け（レベルアップで+3）
+    this.onMessage("spendSp", (client: Client, data: { stat: string }) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.sp <= 0) return;
+      if (data?.stat === "atk" && p.statAtk < 60) {
+        p.statAtk++;
+      } else if (data?.stat === "hp" && p.statHp < 60) {
+        p.statHp++;
+        p.maxHp = this.calcMaxHp(p);
+        p.hp = Math.min(p.hp + 15, p.maxHp);
+      } else if (data?.stat === "spd" && p.statSpd < 25) {
+        p.statSpd++;
+      } else if (data?.stat === "spec" && p.job !== "novice" && p.statSpec < 30) {
+        p.statSpec++;
+      } else {
+        return;
+      }
+      p.sp--;
+      this.savePlayer(client.sessionId, p);
+    });
+
+    this.setSimulationInterval((dt) => this.tick(dt), 50); // 20tick/秒
+    this.clock.setInterval(() => this.saveAll(), AUTOSAVE_INTERVAL_MS);
+  }
+
+  private spawnAllEnemies() {
+    for (const map of Object.values(MAPS)) {
+      for (const def of map.enemies) {
+        const stats = enemyStats(def.level, def.boss);
+        const e = new Enemy();
+        e.kind = def.kind;
+        e.mapId = map.id;
+        e.level = def.level;
+        e.boss = !!def.boss;
+        e.x = def.x;
+        e.y = def.y;
+        e.hp = stats.maxHp;
+        e.maxHp = stats.maxHp;
+        this.state.enemies.set(def.id, e);
+        this.enemyMeta.set(def.id, { def, dir: 1, respawnAt: 0, touchCooldown: new Map() });
+      }
+    }
+  }
+
+  private handleAttack(client: Client) {
+    const p = this.state.players.get(client.sessionId);
+    if (!p || p.dead) return;
+
+    // 向いている方向の近い敵1体にヒット（遠距離職はリーチが長い）
+    const ranged = JOBS[p.job]?.range === "ranged";
+    // 職業固有強化: 近接系=リーチ+5/pt、遠距離系=飛距離+12/pt
+    const root = this.rootJob(p.job);
+    const specRange = root === "ink" ? p.statSpec * 12 : root === "pencil" ? p.statSpec * 5 : 0;
+    const rangeX = (ranged ? RANGED_ATTACK_X : ATTACK_RANGE_X) + specRange;
+    const rangeY = ranged ? RANGED_ATTACK_Y : ATTACK_RANGE_Y;
+    let bestId: string | null = null;
+    let bestDist = Infinity;
+    this.state.enemies.forEach((e, id) => {
+      if (e.dead || e.mapId !== p.mapId) return;
+      if (Math.abs(e.y - p.y) > rangeY) return;
+      const dx = e.x - p.x;
+      const forward = p.flip ? -dx : dx;
+      if (forward < -ATTACK_BACK_X || forward > rangeX) return;
+      const dist = Math.abs(dx);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = id;
+      }
+    });
+    if (!bestId) return;
+
+    const enemy = this.state.enemies.get(bestId)!;
+    const dmg = Math.max(1, Math.round(playerAtk(p.level) * jobAtkMul(p.job) * (1 + p.statAtk * 0.04)));
+    enemy.hp = Math.max(0, enemy.hp - dmg);
+
+    let c = this.contrib.get(bestId);
+    if (!c) {
+      c = new Map();
+      this.contrib.set(bestId, c);
+    }
+    c.set(client.sessionId, (c.get(client.sessionId) || 0) + dmg);
+
+    this.broadcast("hit", { enemyId: bestId, dmg, by: client.sessionId, x: enemy.x, y: enemy.y });
+
+    if (enemy.hp <= 0) this.killEnemy(bestId, enemy);
+  }
+
+  private killEnemy(enemyId: string, enemy: Enemy) {
+    enemy.dead = true;
+    const meta = this.enemyMeta.get(enemyId)!;
+    meta.respawnAt = Date.now() + ENEMY_RESPAWN_MS;
+    meta.touchCooldown.clear();
+
+    // ===== 経験値分配: 貢献度50% + レベル比50% + 人数ボーナス =====
+    // 1ダメージでも与えていれば分配対象（メイプルの寄生文化の再現）
+    const contributors = [...(this.contrib.get(enemyId) || new Map()).entries()]
+      .map(([sessionId, dmg]) => ({ sessionId, dmg, player: this.state.players.get(sessionId) }))
+      .filter((c): c is { sessionId: string; dmg: number; player: Player } => !!c.player);
+
+    if (contributors.length > 0) {
+      const baseExp = enemyStats(enemy.level, enemy.boss).exp;
+      const totalDmg = contributors.reduce((s, c) => s + c.dmg, 0);
+      const sumLevels = contributors.reduce((s, c) => s + c.player.level, 0);
+      const bonus = PARTY_BONUS[Math.min(contributors.length, PARTY_BONUS.length - 1)];
+
+      for (const c of contributors) {
+        const weight = CONTRIB_WEIGHT * (c.dmg / totalDmg) + LEVEL_WEIGHT * (c.player.level / sumLevels);
+        const gain = Math.max(1, Math.round(baseExp * weight * bonus));
+        this.giveExp(c.sessionId, c.player, gain);
+        this.progressQuest(c.sessionId, c.player, enemy);
+      }
+    }
+    this.contrib.delete(enemyId);
+  }
+
+  /** 討伐がクエスト対象ならカウントを進め、達成なら報酬＆次のクエストへ */
+  private progressQuest(sessionId: string, p: Player, enemy: Enemy) {
+    const quest = QUESTS[p.questId];
+    if (!quest) return; // 全クエスト完了済み
+    if (p.questPhase !== "active") return; // 受注していないと進まない
+    if (enemy.mapId !== quest.targetMap) return;
+    if (quest.targetBoss && !enemy.boss) return;
+
+    p.questProgress++;
+    if (p.questProgress < quest.targetCount) return;
+
+    // 達成 → しおりの妖精に報告すると報酬（クリア処理はclaimQuestで）
+    p.questPhase = "ready";
+    this.broadcast("questReady", { sessionId, questId: quest.id });
+  }
+
+  private giveExp(sessionId: string, p: Player, gain: number) {
+    if (p.level >= LEVEL_CAP) return;
+    p.exp += gain;
+    this.broadcast("exp", { sessionId, amount: gain });
+    while (p.exp >= p.expToNext && p.level < LEVEL_CAP) {
+      p.exp -= p.expToNext;
+      p.level++;
+      p.expToNext = expToNext(p.level);
+      p.sp += 3; // スキルポイント獲得
+      p.maxHp = this.calcMaxHp(p);
+      p.hp = p.maxHp; // レベルアップで全回復
+      this.broadcast("levelup", { sessionId, level: p.level });
+    }
+  }
+
+  /** 最大HP = 基礎×職業倍率＋SP振り分け分 */
+  private calcMaxHp(p: Player) {
+    return Math.round(playerMaxHp(p.level) * jobHpMul(p.job)) + p.statHp * 15;
+  }
+
+  /** 職業の系統（1次職のid）を返す */
+  private rootJob(job: string): string {
+    let j = JOBS[job];
+    while (j?.parent) j = JOBS[j.parent];
+    return j?.id ?? "novice";
+  }
+
+  private tick(dtMs: number) {
+    const now = Date.now();
+    const dt = dtMs / 1000;
+
+    this.state.enemies.forEach((e, id) => {
+      const meta = this.enemyMeta.get(id)!;
+
+      if (e.dead) {
+        if (now >= meta.respawnAt) {
+          const stats = enemyStats(e.level, e.boss);
+          e.hp = stats.maxHp;
+          e.x = meta.def.x;
+          e.y = meta.def.y;
+          e.dead = false;
+        }
+        return;
+      }
+
+      // パトロール移動
+      const stats = enemyStats(e.level, e.boss);
+      e.x += meta.dir * stats.speed * dt;
+      if (e.x >= meta.def.patrolMax) meta.dir = -1;
+      if (e.x <= meta.def.patrolMin) meta.dir = 1;
+      e.flip = meta.dir < 0;
+
+      // 触れたプレイヤーにダメージ（タッチダメージ）
+      this.state.players.forEach((p, sessionId) => {
+        if (p.dead || p.mapId !== e.mapId) return;
+        if (Math.abs(p.x - e.x) > TOUCH_RANGE_X || Math.abs(p.y - e.y) > TOUCH_RANGE_Y) return;
+        const cd = meta.touchCooldown.get(sessionId) || 0;
+        if (now < cd) return;
+        meta.touchCooldown.set(sessionId, now + TOUCH_COOLDOWN_MS);
+
+        // クレヨン系の固有強化: 被ダメージ-3%/pt（最大-90%）
+        let dmgTaken = stats.touchDmg;
+        if (this.rootJob(p.job) === "crayon") {
+          dmgTaken = Math.max(1, Math.round(dmgTaken * (1 - p.statSpec * 0.03)));
+        }
+        p.hp = Math.max(0, p.hp - dmgTaken);
+        this.lastDamagedAt.set(sessionId, now);
+        this.broadcast("playerHit", { sessionId, dmg: dmgTaken });
+        if (p.hp <= 0) this.killPlayer(sessionId, p);
+      });
+    });
+
+    // 自然回復（被弾後5秒経過で 最大HPの4%/秒）
+    if (now - this.lastRegenAt >= REGEN_INTERVAL_MS) {
+      this.lastRegenAt = now;
+      this.state.players.forEach((p, sessionId) => {
+        if (p.dead || p.hp >= p.maxHp) return;
+        if (now - (this.lastDamagedAt.get(sessionId) || 0) < REGEN_AFTER_DAMAGE_MS) return;
+        p.hp = Math.min(p.maxHp, p.hp + Math.max(1, Math.round(p.maxHp * 0.04)));
+      });
+    }
+  }
+
+  private killPlayer(sessionId: string, p: Player) {
+    p.dead = true;
+    p.anim = "idle";
+    this.broadcast("died", { sessionId });
+    // 3秒後にもくじ広場で復活（経験値ロストなし・カジュアル設計）
+    this.clock.setTimeout(() => {
+      if (!this.state.players.has(sessionId)) return;
+      const hub = MAPS.hub;
+      p.mapId = "hub";
+      p.x = hub.spawnX;
+      p.y = hub.spawnY;
+      p.hp = p.maxHp;
+      p.dead = false;
+      this.broadcast("respawn", { sessionId });
+    }, PLAYER_RESPAWN_MS);
+  }
+
+  onJoin(client: Client, options?: { playerId?: string; secret?: string; name?: string }) {
+    const playerId = options?.playerId;
+    const secret = options?.secret;
+    if (!playerId || !secret) throw new Error("auth_required");
+
+    const existing = store.get(playerId);
+    if (existing && existing.secret !== secret) throw new Error("auth_mismatch");
+    if ([...this.playerIds.values()].includes(playerId)) throw new Error("already_online");
+
+    // キャラ選択（タイトル画面で選んだ見た目）。指定がなければ空いている番号
+    let colorIdx: number;
+    const chosen = Number((options as any)?.charIdx);
+    if (Number.isInteger(chosen) && chosen >= 0 && chosen <= 3) {
+      colorIdx = chosen;
+    } else {
+      const usedColors = new Set([...this.state.players.values()].map((pl) => pl.colorIdx));
+      colorIdx = 0;
+      while (usedColors.has(colorIdx)) colorIdx++;
+    }
+
+    const hub = MAPS.hub;
+    const p = new Player();
+    p.colorIdx = colorIdx;
+
+    if (existing) {
+      // セーブデータから復元（HPはログイン時全回復）
+      p.name = options?.name?.slice(0, 12) || existing.name;
+      p.level = Math.min(existing.level, LEVEL_CAP);
+      p.exp = existing.exp;
+      p.job = existing.job && JOBS[existing.job] ? existing.job : "novice";
+      p.sp = existing.sp ?? 0;
+      p.statAtk = existing.statAtk ?? 0;
+      p.statHp = existing.statHp ?? 0;
+      p.statSpd = existing.statSpd ?? 0;
+      p.statSpec = (existing as any).statSpec ?? 0;
+      p.expToNext = expToNext(p.level);
+      p.maxHp = this.calcMaxHp(p);
+      p.hp = p.maxHp;
+      p.mapId = MAPS[existing.mapId] ? existing.mapId : "hub";
+      p.x = existing.x;
+      p.y = existing.y;
+      p.questId = existing.questId ?? FIRST_QUEST;
+      p.questProgress = existing.questProgress ?? 0;
+      p.questPhase = existing.questPhase === "active" || existing.questPhase === "ready" ? existing.questPhase : "idle";
+    } else {
+      p.name = options?.name?.slice(0, 12) || `ぼうけんしゃ${colorIdx + 1}`;
+      p.x = hub.spawnX + colorIdx * 60;
+      p.y = hub.spawnY;
+    }
+
+    this.state.players.set(client.sessionId, p);
+    this.playerIds.set(client.sessionId, playerId);
+    this.secrets.set(client.sessionId, secret);
+    this.savePlayer(client.sessionId, p);
+    console.log(
+      `[join] ${p.name} Lv${p.level} (${client.sessionId}) ${existing ? "復元" : "新規"} (${this.clients.length}/4)`
+    );
+  }
+
+  private savePlayer(sessionId: string, p: Player) {
+    const playerId = this.playerIds.get(sessionId);
+    const secret = this.secrets.get(sessionId);
+    if (!playerId || !secret) return;
+    store.upsert({
+      playerId,
+      secret,
+      name: p.name,
+      level: p.level,
+      exp: p.exp,
+      mapId: p.mapId,
+      x: p.x,
+      y: p.y,
+      questId: p.questId,
+      questProgress: p.questProgress,
+      questPhase: p.questPhase,
+      job: p.job,
+      sp: p.sp,
+      statAtk: p.statAtk,
+      statHp: p.statHp,
+      statSpd: p.statSpd,
+      statSpec: p.statSpec,
+      colorIdx: p.colorIdx,
+      updatedAt: Date.now(),
+    });
+  }
+
+  private saveAll() {
+    this.state.players.forEach((p, sessionId) => this.savePlayer(sessionId, p));
+  }
+
+  onLeave(client: Client) {
+    const p = this.state.players.get(client.sessionId);
+    if (p) this.savePlayer(client.sessionId, p);
+    console.log(`[leave] ${p?.name} (${client.sessionId})`);
+    this.state.players.delete(client.sessionId);
+    this.playerIds.delete(client.sessionId);
+    this.secrets.delete(client.sessionId);
+    this.lastDamagedAt.delete(client.sessionId);
+    store.flush();
+  }
+
+  onDispose() {
+    this.saveAll();
+    store.flush();
+  }
+}
