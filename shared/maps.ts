@@ -28,6 +28,19 @@ export const ENEMY_KINDS: Record<string, { name: string }> = {
   keshiboo: { name: "ケシブー" }, // 消しゴムのブタ
   fudemushi: { name: "フデムシ" }, // 筆の穂先の毛虫
   golem: { name: "エノグゴーレム" }, // 絵の具チューブのゴーレム
+  // ↓第4-7章用の予約枠（名前だけ確保。今は既存種を流用、後でアート＋専用挙動を差し込む）
+  hoshimushi: { name: "ホシムシ" }, // 4章: 星のカケラの虫（飛ぶ予定）
+  nebusuke: { name: "ネブスケ" }, // 4章: 寝ぼけスライム
+  kaminari: { name: "カミナリダマ" }, // 5章: 雷の玉
+  namiko: { name: "ナミコゾウ" }, // 5章: 波の子
+  nijicho: { name: "ニジチョウ" }, // 6章: 虹の蝶（飛ぶ予定）
+  hikaridama: { name: "ヒカリダマ" }, // 6章: 光の玉
+  kageboushi: { name: "カゲボウシ" }, // 7章: 消しゴムの影
+  // ボス予約
+  nemuriguma: { name: "ねむりぐま" }, // 4章ボス
+  raiu_golem: { name: "らいうゴーレム" }, // 5章ボス
+  irodori: { name: "いろどりの主" }, // 6章ボス
+  rakugaki_daio: { name: "ラクガキ大王" }, // 7章ラスボス
 };
 
 export interface LadderDef {
@@ -304,8 +317,242 @@ export const MAPS: Record<string, MapDef> = {
       { id: "p-3", kind: "keshiboo", level: 37, x: 1500, y: 636, patrolMin: 1360, patrolMax: 1700 },
       { id: "p-4", kind: "golem", level: 40, x: 2100, y: 628, patrolMin: 1950, patrolMax: 2300, boss: true },
     ],
-    doors: [{ id: "to-blank", x: 140, y: 612, toMap: "blank", toX: 1300, toY: 612, label: "←しろいページへ" }],
+    doors: [
+      { id: "to-blank", x: 140, y: 612, toMap: "blank", toX: 1300, toY: 612, label: "←しろいページへ" },
+      { id: "to-moonpage", x: 2344, y: 612, toMap: "moonpage", toX: 140, toY: 612, label: "つきよのページ→" },
+    ],
     ladders: [{ x: 900, y1: 417, y2: 656 }, { x: 1800, y1: 447, y2: 656 }],
+    npcs: [],
+  },
+
+  // ============ 第4章 よるのものがたり（Lv40-55）============
+  moonpage: {
+    id: "moonpage", name: "つきよのページ", width: 2200, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1100, y: 688, w: 2200, h: 64 },
+      { x: 500, y: 510, w: 220, h: 26 }, { x: 950, y: 410, w: 200, h: 26 }, { x: 1450, y: 490, w: 260, h: 26 }, { x: 1900, y: 400, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "mo-1", kind: "inkdama", level: 41, x: 520, y: 636, patrolMin: 380, patrolMax: 700 },
+      { id: "mo-2", kind: "keshiboo", level: 42, x: 1000, y: 636, patrolMin: 860, patrolMax: 1180 },
+      { id: "mo-3", kind: "kinoko", level: 44, x: 1500, y: 636, patrolMin: 1360, patrolMax: 1700 },
+      { id: "mo-4", kind: "makimaki", level: 45, x: 1950, y: 636, patrolMin: 1820, patrolMax: 2100 },
+    ],
+    doors: [
+      { id: "to-peak", x: 140, y: 612, toMap: "peak", toX: 2344, toY: 612, label: "←おえかきのやまへ" },
+      { id: "to-dream", x: 2144, y: 612, toMap: "dream", toX: 140, toY: 612, label: "ゆめのなかへ→" },
+    ],
+    ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 477, y2: 656 }],
+    npcs: [],
+  },
+  dream: {
+    id: "dream", name: "ゆめのなか", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1150, y: 688, w: 2300, h: 64 },
+      { x: 520, y: 500, w: 220, h: 26 }, { x: 980, y: 400, w: 200, h: 26 }, { x: 1500, y: 480, w: 260, h: 26 }, { x: 2000, y: 410, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "dr-1", kind: "kinoko", level: 46, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "dr-2", kind: "inkdama", level: 48, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "dr-3", kind: "keshiboo", level: 50, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "dr-4", kind: "fudemushi", level: 51, x: 2050, y: 636, patrolMin: 1900, patrolMax: 2200 },
+    ],
+    doors: [
+      { id: "to-moonpage", x: 140, y: 612, toMap: "moonpage", toX: 2144, toY: 612, label: "←つきよのページへ" },
+      { id: "to-lullaby", x: 2244, y: 612, toMap: "lullaby", toX: 140, toY: 612, label: "こもりうたの間へ→" },
+    ],
+    ladders: [{ x: 980, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+  lullaby: {
+    id: "lullaby", name: "こもりうたの間", width: 2000, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1000, y: 688, w: 2000, h: 64 },
+      { x: 500, y: 500, w: 220, h: 26 }, { x: 950, y: 410, w: 200, h: 26 }, { x: 1450, y: 480, w: 240, h: 26 },
+    ],
+    enemies: [
+      { id: "lu-1", kind: "keshiboo", level: 53, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "lu-2", kind: "kinoko", level: 54, x: 1000, y: 636, patrolMin: 860, patrolMax: 1200 },
+      { id: "lu-3", kind: "rafbear", level: 55, x: 1650, y: 630, patrolMin: 1480, patrolMax: 1880, boss: true },
+    ],
+    doors: [
+      { id: "to-dream", x: 140, y: 612, toMap: "dream", toX: 2244, toY: 612, label: "←ゆめのなかへ" },
+      { id: "to-storm", x: 1944, y: 612, toMap: "storm", toX: 140, toY: 612, label: "あらしのうみへ→" },
+    ],
+    ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+
+  // ============ 第5章 あらしのうみ（Lv55-70）============
+  storm: {
+    id: "storm", name: "あらしのうみ", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1150, y: 688, w: 2300, h: 64 },
+      { x: 520, y: 510, w: 220, h: 26 }, { x: 980, y: 410, w: 200, h: 26 }, { x: 1500, y: 490, w: 260, h: 26 }, { x: 2000, y: 400, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "st-1", kind: "golem", level: 56, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "st-2", kind: "fudemushi", level: 58, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "st-3", kind: "inkdama", level: 60, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "st-4", kind: "kinoko", level: 62, x: 2050, y: 636, patrolMin: 1900, patrolMax: 2200 },
+    ],
+    doors: [
+      { id: "to-lullaby", x: 140, y: 612, toMap: "lullaby", toX: 1944, toY: 612, label: "←こもりうたの間へ" },
+      { id: "to-thunder", x: 2244, y: 612, toMap: "thunder", toX: 140, toY: 612, label: "かみなりだいちへ→" },
+    ],
+    ladders: [{ x: 980, y1: 397, y2: 656 }, { x: 1500, y1: 477, y2: 656 }],
+    npcs: [],
+  },
+  thunder: {
+    id: "thunder", name: "かみなりだいち", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1150, y: 688, w: 2300, h: 64 },
+      { x: 500, y: 500, w: 220, h: 26 }, { x: 1000, y: 400, w: 200, h: 26 }, { x: 1500, y: 480, w: 260, h: 26 }, { x: 2000, y: 410, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "th-1", kind: "inkdama", level: 63, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "th-2", kind: "golem", level: 65, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "th-3", kind: "fudemushi", level: 66, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "th-4", kind: "keshiboo", level: 68, x: 2050, y: 636, patrolMin: 1900, patrolMax: 2200 },
+    ],
+    doors: [
+      { id: "to-storm", x: 140, y: 612, toMap: "storm", toX: 2244, toY: 612, label: "←あらしのうみへ" },
+      { id: "to-maelstrom", x: 2244, y: 612, toMap: "maelstrom", toX: 140, toY: 612, label: "うずまきの底へ→" },
+    ],
+    ladders: [{ x: 1000, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+  maelstrom: {
+    id: "maelstrom", name: "うずまきの底", width: 2000, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1000, y: 688, w: 2000, h: 64 },
+      { x: 500, y: 500, w: 220, h: 26 }, { x: 950, y: 410, w: 200, h: 26 }, { x: 1450, y: 480, w: 240, h: 26 },
+    ],
+    enemies: [
+      { id: "ma-1", kind: "golem", level: 68, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "ma-2", kind: "fudemushi", level: 69, x: 1000, y: 636, patrolMin: 860, patrolMax: 1200 },
+      { id: "ma-3", kind: "golem", level: 70, x: 1650, y: 628, patrolMin: 1480, patrolMax: 1880, boss: true },
+    ],
+    doors: [
+      { id: "to-thunder", x: 140, y: 612, toMap: "thunder", toX: 2244, toY: 612, label: "←かみなりだいちへ" },
+      { id: "to-rainbow", x: 1944, y: 612, toMap: "rainbow", toX: 140, toY: 612, label: "にじのかけはしへ→" },
+    ],
+    ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+
+  // ============ 第6章 にじのかなた（Lv70-85）============
+  rainbow: {
+    id: "rainbow", name: "にじのかけはし", width: 2400, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1200, y: 688, w: 2400, h: 64 },
+      { x: 520, y: 510, w: 220, h: 26 }, { x: 1000, y: 410, w: 200, h: 26 }, { x: 1500, y: 490, w: 260, h: 26 }, { x: 2050, y: 400, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "ra-1", kind: "kinoko", level: 71, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "ra-2", kind: "inkdama", level: 73, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "ra-3", kind: "makimaki", level: 75, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "ra-4", kind: "fudemushi", level: 77, x: 2100, y: 636, patrolMin: 1950, patrolMax: 2300 },
+    ],
+    doors: [
+      { id: "to-maelstrom", x: 140, y: 612, toMap: "maelstrom", toX: 1944, toY: 612, label: "←うずまきの底へ" },
+      { id: "to-prism", x: 2344, y: 612, toMap: "prism", toX: 140, toY: 612, label: "ひかりのプリズムへ→" },
+    ],
+    ladders: [{ x: 1000, y1: 397, y2: 656 }, { x: 1500, y1: 477, y2: 656 }],
+    npcs: [],
+  },
+  prism: {
+    id: "prism", name: "ひかりのプリズム", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1150, y: 688, w: 2300, h: 64 },
+      { x: 500, y: 500, w: 220, h: 26 }, { x: 1000, y: 400, w: 200, h: 26 }, { x: 1500, y: 480, w: 260, h: 26 }, { x: 2000, y: 410, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "pr-1", kind: "inkdama", level: 78, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "pr-2", kind: "kinoko", level: 80, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "pr-3", kind: "fudemushi", level: 82, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "pr-4", kind: "keshiboo", level: 84, x: 2050, y: 636, patrolMin: 1900, patrolMax: 2200 },
+    ],
+    doors: [
+      { id: "to-rainbow", x: 140, y: 612, toMap: "rainbow", toX: 2344, toY: 612, label: "←にじのかけはしへ" },
+      { id: "to-aurora", x: 2244, y: 612, toMap: "aurora", toX: 140, toY: 612, label: "おーろらの空へ→" },
+    ],
+    ladders: [{ x: 1000, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+  aurora: {
+    id: "aurora", name: "おーろらの空", width: 2000, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1000, y: 688, w: 2000, h: 64 },
+      { x: 500, y: 500, w: 220, h: 26 }, { x: 950, y: 410, w: 200, h: 26 }, { x: 1450, y: 480, w: 240, h: 26 },
+    ],
+    enemies: [
+      { id: "au-1", kind: "fudemushi", level: 84, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "au-2", kind: "inkdama", level: 85, x: 1000, y: 636, patrolMin: 860, patrolMax: 1200 },
+      { id: "au-3", kind: "rafbear", level: 86, x: 1650, y: 630, patrolMin: 1480, patrolMax: 1880, boss: true },
+    ],
+    doors: [
+      { id: "to-prism", x: 140, y: 612, toMap: "prism", toX: 2244, toY: 612, label: "←ひかりのプリズムへ" },
+      { id: "to-edge", x: 1944, y: 612, toMap: "edge", toX: 140, toY: 612, label: "せかいのふちへ→" },
+    ],
+    ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+
+  // ============ 第7章 さいごのページ（Lv85-100）============
+  edge: {
+    id: "edge", name: "せかいのふち", width: 2400, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1200, y: 688, w: 2400, h: 64 },
+      { x: 520, y: 510, w: 220, h: 26 }, { x: 1000, y: 410, w: 200, h: 26 }, { x: 1500, y: 490, w: 260, h: 26 }, { x: 2050, y: 400, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "ed-1", kind: "keshiboo", level: 86, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "ed-2", kind: "golem", level: 88, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "ed-3", kind: "fudemushi", level: 90, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "ed-4", kind: "rafbear", level: 92, x: 2100, y: 636, patrolMin: 1950, patrolMax: 2300 },
+    ],
+    doors: [
+      { id: "to-aurora", x: 140, y: 612, toMap: "aurora", toX: 1944, toY: 612, label: "←おーろらの空へ" },
+      { id: "to-tobira", x: 2344, y: 612, toMap: "tobira", toX: 140, toY: 612, label: "かきかけのトビラへ→" },
+    ],
+    ladders: [{ x: 1000, y1: 397, y2: 656 }, { x: 1500, y1: 477, y2: 656 }],
+    npcs: [],
+  },
+  tobira: {
+    id: "tobira", name: "かきかけのトビラ", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1150, y: 688, w: 2300, h: 64 },
+      { x: 500, y: 500, w: 220, h: 26 }, { x: 1000, y: 400, w: 200, h: 26 }, { x: 1500, y: 480, w: 260, h: 26 }, { x: 2000, y: 410, w: 220, h: 26 },
+    ],
+    enemies: [
+      { id: "to-1", kind: "golem", level: 93, x: 520, y: 636, patrolMin: 380, patrolMax: 720 },
+      { id: "to-2", kind: "fudemushi", level: 95, x: 1050, y: 636, patrolMin: 900, patrolMax: 1250 },
+      { id: "to-3", kind: "keshiboo", level: 97, x: 1550, y: 636, patrolMin: 1400, patrolMax: 1760 },
+      { id: "to-4", kind: "rafbear", level: 98, x: 2050, y: 636, patrolMin: 1900, patrolMax: 2200 },
+    ],
+    doors: [
+      { id: "to-edge", x: 140, y: 612, toMap: "edge", toX: 2344, toY: 612, label: "←せかいのふちへ" },
+      { id: "to-finale", x: 2244, y: 612, toMap: "finale", toX: 140, toY: 612, label: "さいごのいちまいへ→" },
+    ],
+    ladders: [{ x: 1000, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
+    npcs: [],
+  },
+  finale: {
+    id: "finale", name: "さいごのいちまい", width: 2200, height: WORLD_H, spawnX: 140, spawnY: 560,
+    platforms: [
+      { x: 1100, y: 688, w: 2200, h: 64 },
+      { x: 520, y: 500, w: 220, h: 26 }, { x: 1000, y: 410, w: 200, h: 26 }, { x: 1550, y: 480, w: 240, h: 26 },
+    ],
+    enemies: [
+      { id: "fi-1", kind: "rafbear", level: 98, x: 520, y: 636, patrolMin: 380, patrolMax: 760 },
+      { id: "fi-2", kind: "golem", level: 99, x: 1050, y: 636, patrolMin: 900, patrolMax: 1300 },
+      { id: "fi-3", kind: "rafbear", level: 100, x: 1750, y: 624, patrolMin: 1500, patrolMax: 2000, boss: true },
+    ],
+    doors: [
+      { id: "to-tobira", x: 140, y: 612, toMap: "tobira", toX: 2244, toY: 612, label: "←かきかけのトビラへ" },
+    ],
+    ladders: [{ x: 1000, y1: 397, y2: 656 }, { x: 1550, y1: 467, y2: 656 }],
     npcs: [],
   },
 };

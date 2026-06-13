@@ -19,8 +19,8 @@ export interface JobDef {
   healRatio?: number;
 }
 
-/** tier→転職可能レベル */
-export const ADVANCE_LEVELS = [0, 10, 30, 60, 90] as const;
+/** tier→転職可能レベル（1日で全転職を味わえるテンポ重視の配分） */
+export const ADVANCE_LEVELS = [0, 5, 20, 35, 50] as const;
 
 export const JOBS: Record<string, JobDef> = {
   // ============ ✏️ エンピツ系（近接アタッカー） ============

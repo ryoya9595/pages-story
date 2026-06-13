@@ -375,6 +375,28 @@ export class GameScene extends Phaser.Scene {
       addLayer("bg_dusk_far", 0.18, -28, { y: 0, originY: 0, scale: 4.5, alpha: 0.6 });
       addLayer("bg_dusk_mountains", 0.35, -26, { y: 0, originY: 0, scale: 4.5, alpha: 0.8 });
       addLayer("bg_cliffs_clouds", 0.55, -24, { y: 100, originY: 0, scale: 2.4 });
+    } else if (["moonpage", "dream", "lullaby"].includes(map.id)) {
+      // 第4章 よるのものがたり（夜・星空・月）
+      this.cameras.main.setBackgroundColor("#2b2740");
+      addLayer("bg_cliffs_sky", 0.04, -30, { y: 0, originY: 0, scale: 720 / 304, alpha: 0.45 });
+      addLayer("bg_dusk_mountains", 0.3, -26, { y: 0, originY: 0, scale: 4.5, alpha: 0.55 });
+      addLayer("bg_cliffs_clouds", 0.5, -24, { y: 90, originY: 0, scale: 2.4, alpha: 0.35 });
+    } else if (["storm", "thunder", "maelstrom"].includes(map.id)) {
+      // 第5章 あらしのうみ（嵐・雷・荒れた海）
+      this.cameras.main.setBackgroundColor("#3a4258");
+      addLayer("bg_cliffs_clouds", 0.12, -28, { y: 20, originY: 0, scale: 2.6, alpha: 0.55 });
+      addLayer("bg_cliffs_sea", 0.3, -26, { y: 724, originY: 1, scale: 2.6, alpha: 0.85 });
+      addLayer("bg_cliffs_far", 0.5, -24, { y: 668, originY: 1, scale: 2.4, alpha: 0.6 });
+    } else if (["rainbow", "prism", "aurora"].includes(map.id)) {
+      // 第6章 にじのかなた（虹・光・色が戻る）
+      this.cameras.main.setBackgroundColor("#bfe3f0");
+      addLayer("bg_cliffs_sky", 0.04, -30, { y: 0, originY: 0, scale: 720 / 304 });
+      addLayer("bg_cliffs_clouds", 0.2, -28, { y: 50, originY: 0, scale: 2.4 });
+      addLayer("bg_cliffs_clouds", 0.45, -26, { y: 300, originY: 0, scale: 3, alpha: 0.7 });
+    } else if (["edge", "tobira", "finale"].includes(map.id)) {
+      // 第7章 さいごのページ（白紙の果て・結末は暗く）
+      this.cameras.main.setBackgroundColor(map.id === "finale" ? "#1e1a2e" : "#efe7d4");
+      addLayer("bg_cliffs_clouds", 0.12, -28, { y: 60, originY: 0, scale: 2, alpha: 0.3 });
     } else {
       // 明るい崖と海（もくじ広場）
       this.cameras.main.setBackgroundColor("#8edceb");
