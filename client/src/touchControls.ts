@@ -28,6 +28,9 @@ export class TouchControls {
   private sketchQueued = false;
   private sketchBtn?: Phaser.GameObjects.Arc;
   private sketchLabel?: Phaser.GameObjects.Text;
+  private potionQueued = false;
+  private potionBtn?: Phaser.GameObjects.Arc;
+  private potionLabel?: Phaser.GameObjects.Text;
 
   private static readonly RADIUS = 60;
   private static readonly DEADZONE = 0.18;
@@ -118,6 +121,24 @@ export class TouchControls {
       this.sketchQueued = true;
     });
 
+    // ポーションボタン（所持がある時だけ表示）
+    this.potionBtn = scene.add
+      .circle(0, 0, 40, 0x2e9e7a, 0.25)
+      .setStrokeStyle(4, 0x1e7d64, 0.6)
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setInteractive(new Phaser.Geom.Circle(40, 40, 50), Phaser.Geom.Circle.Contains)
+      .setVisible(false);
+    this.potionLabel = scene.add
+      .text(0, 0, "🧪", { fontSize: "26px" })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001)
+      .setVisible(false);
+    this.potionBtn.on("pointerdown", () => {
+      this.potionQueued = true;
+    });
+
     this.layout();
     scene.scale.on("resize", () => this.layout());
 
@@ -130,6 +151,9 @@ export class TouchControls {
         return;
       }
       if (this.sketchBtn?.visible && Phaser.Math.Distance.Between(pointer.x, pointer.y, this.sketchBtn.x, this.sketchBtn.y) < 84) {
+        return;
+      }
+      if (this.potionBtn?.visible && Phaser.Math.Distance.Between(pointer.x, pointer.y, this.potionBtn.x, this.potionBtn.y) < 78) {
         return;
       }
       if (this.stickPointerId !== null) return;
@@ -176,6 +200,8 @@ export class TouchControls {
     this.healLabel?.setPosition(width - 90, height - 312);
     this.sketchBtn?.setPosition(width - 196, height - 232);
     this.sketchLabel?.setPosition(width - 196, height - 232);
+    this.potionBtn?.setPosition(width - 300, height - 150);
+    this.potionLabel?.setPosition(width - 300, height - 150);
   }
 
   setHealVisible(visible: boolean) {
@@ -186,6 +212,11 @@ export class TouchControls {
   setSketchVisible(visible: boolean) {
     this.sketchBtn?.setVisible(visible && this.enabled);
     this.sketchLabel?.setVisible(visible && this.enabled);
+  }
+
+  setPotionVisible(visible: boolean) {
+    this.potionBtn?.setVisible(visible && this.enabled);
+    this.potionLabel?.setVisible(visible && this.enabled);
   }
 
   /** ジャンプ入力を1回分消費する */
@@ -214,5 +245,12 @@ export class TouchControls {
     const s = this.sketchQueued;
     this.sketchQueued = false;
     return s;
+  }
+
+  /** ポーション入力を1回分消費する */
+  consumePotion(): boolean {
+    const p = this.potionQueued;
+    this.potionQueued = false;
+    return p;
   }
 }

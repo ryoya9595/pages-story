@@ -73,7 +73,7 @@ export class GameScene extends Phaser.Scene {
   private collider?: Phaser.Physics.Arcade.Collider;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keys!: Record<"a" | "d" | "w" | "s" | "space" | "j" | "x" | "h" | "k", Phaser.Input.Keyboard.Key>;
+  private keys!: Record<"a" | "d" | "w" | "s" | "space" | "j" | "x" | "h" | "k" | "p", Phaser.Input.Keyboard.Key>;
   private jobOverlay?: Phaser.GameObjects.GameObject[];
   private lastHealAt = 0;
   private myLabelJob = "";
@@ -91,6 +91,9 @@ export class GameScene extends Phaser.Scene {
   private lastSketchAt = 0; // とくぎ発動のクライアント側CT表示用
   private sketchBtn?: Phaser.GameObjects.Text; // スケッチブックを開くボタン
   private sketchOverlay?: Phaser.GameObjects.GameObject[];
+  private shopBtn?: Phaser.GameObjects.Text; // ショップを開くボタン
+  private shopOverlay?: Phaser.GameObjects.GameObject[];
+  private lastPotionAt = 0;
 
   constructor() {
     super("game");
@@ -167,6 +170,7 @@ export class GameScene extends Phaser.Scene {
       x: this.input.keyboard!.addKey("X"),
       h: this.input.keyboard!.addKey("H"),
       k: this.input.keyboard!.addKey("K"),
+      p: this.input.keyboard!.addKey("P"),
     };
     this.touch = new TouchControls(this);
 
@@ -215,10 +219,24 @@ export class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     this.sketchBtn.on("pointerdown", () => this.toggleSketchBook());
 
+    // ショップ（ポーション購入）を開くボタン
+    this.shopBtn = this.add
+      .text(0, 0, "🛒 ショップ", {
+        fontSize: "14px",
+        color: "#ffffff",
+        backgroundColor: "#1e7d64ee",
+        padding: { x: 10, y: 6 },
+        fontStyle: "bold",
+      })
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setInteractive({ useHandCursor: true });
+    this.shopBtn.on("pointerdown", () => this.toggleShop());
+
     // PC向け操作ヒント
     if (!this.sys.game.device.input.touch) {
       this.add
-        .text(this.scale.width / 2, this.scale.height - 8, "←→/AD:いどう ␣:ジャンプ J/X:こうげき K:とくぎ ↑↓:はしご H:かいふく", {
+        .text(this.scale.width / 2, this.scale.height - 8, "←→/AD:いどう ␣:ジャンプ J/X:こうげき K:とくぎ P:ポーション ↑↓:はしご H:かいふく", {
           fontSize: "11px",
           color: "#3a3530",
           backgroundColor: "#ffffff88",
@@ -759,6 +777,22 @@ export class GameScene extends Phaser.Scene {
       sfx.questClear();
     });
 
+    // コイン獲得（自分の分だけ表示してクラッタを抑える）
+    room.onMessage("coin", (m: { sessionId: string; amount: number }) => {
+      if (m.sessionId !== room.sessionId || !this.me) return;
+      this.floatText(`+${m.amount}🪙`, this.me.x + 14, this.me.y - 30, "#d4a017", 14);
+    });
+
+    // ポーション使用（回復演出）
+    room.onMessage("potionUsed", (m: { sessionId: string; amount: number }) => {
+      const who = m.sessionId === room.sessionId ? this.me : this.remotes.get(m.sessionId)?.sprite;
+      if (!who || (who as any).visible === false) return;
+      const circle = this.add.circle((who as any).x, (who as any).y, 24, 0x6bcb77, 0.3).setDepth(150);
+      this.tweens.add({ targets: circle, radius: 90, alpha: 0, duration: 380, onComplete: () => circle.destroy() });
+      this.floatText(`+${m.amount}`, (who as any).x, (who as any).y - 40, "#2e7d32");
+      if (m.sessionId === room.sessionId) sfx.heal();
+    });
+
     room.onMessage("questAccepted", (m: { sessionId: string; questId: string }) => {
       if (m.sessionId !== room.sessionId || !this.me) return;
       const q = QUESTS[m.questId];
@@ -994,6 +1028,8 @@ export class GameScene extends Phaser.Scene {
 
     // スマホのとくぎボタンは装備がある時だけ
     this.touch.setSketchVisible(!!SKETCHES[this.myState.equippedSketch]);
+    // ポーションボタンは所持がある時だけ
+    this.touch.setPotionVisible(this.myState.potions > 0);
   }
 
   private drawBars() {
@@ -1015,12 +1051,13 @@ export class GameScene extends Phaser.Scene {
     if (this.barText) {
       this.barText.setPosition(x + 6, y + 1);
       this.barText.setText(
-        `HP ${this.myState.hp}/${this.myState.maxHp}   EXP ${this.myState.exp}/${this.myState.expToNext}`
+        `HP ${this.myState.hp}/${this.myState.maxHp}   EXP ${this.myState.exp}/${this.myState.expToNext}   🪙${this.myState.coins} 🧪${this.myState.potions}`
       );
     }
-    this.spBtn?.setPosition(x + w + 12, y - 2);
-    // スケッチボタンはSPの有無で段を変える（SPが出てたら下、無ければ上の段）
-    this.sketchBtn?.setPosition(x + w + 12, this.myState.sp > 0 ? y + 24 : y - 2);
+    // ボタン配置: スケッチ＝上段、ショップ＝下段、SP＝スケッチの右（出てる時）
+    this.sketchBtn?.setPosition(x + w + 12, y - 2);
+    this.shopBtn?.setPosition(x + w + 12, y + 24);
+    this.spBtn?.setPosition(x + w + 130, y - 2);
   }
 
   /** SP振り分けパネル */
@@ -1131,45 +1168,44 @@ export class GameScene extends Phaser.Scene {
       palette: "🎨パレット系：とくぎで周囲も回復",
       novice: "転職するととくぎが系統別に変化するよ",
     };
+    const learnedSet = new Set(learned);
+    const all = Object.values(SKETCHES);
     const head = this.add
-      .text(cx, top, `📕 スケッチブック\n${flavor[root] ?? flavor.novice}`, {
+      .text(cx, top, `📕 スケッチ図鑑　${learnedSet.size}/${all.length}\n${flavor[root] ?? flavor.novice}`, {
         fontSize: "15px", color: "#fff8e7", align: "center", fontStyle: "bold",
         wordWrap: { width: w - 20 },
       })
       .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501);
     objs.push(head);
 
-    if (learned.length === 0) {
-      const none = this.add
-        .text(cx, top + 70, "まだ何も覚えていないよ。\n敵を倒すとスケッチを覚える！", {
-          fontSize: "14px", color: "#fff8e7", align: "center",
-        })
-        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501);
-      objs.push(none);
-    }
-
-    learned.forEach((kind, i) => {
-      const def = SKETCHES[kind];
-      if (!def) return;
-      const y = top + 64 + i * 60;
-      const isEq = this.myState.equippedSketch === kind;
+    // 全スケッチを並べ、未収集は「？？？」＋入手元の敵名ヒント（コンプ欲）
+    all.forEach((def, i) => {
+      const y = top + 66 + i * 56;
+      const got = learnedSet.has(def.kind);
+      const isEq = got && this.myState.equippedSketch === def.kind;
+      const enemyName = ENEMY_KINDS[def.kind]?.name ?? "なぞのラクガキ";
+      const label = got
+        ? `${isEq ? "▶ " : ""}${def.emoji} ${def.name}\n${def.desc}`
+        : `❓ ？？？\n（${enemyName}を たおすと おぼえる）`;
       const btn = this.add
-        .text(cx, y, `${isEq ? "▶ " : ""}${def.emoji} ${def.name}\n${def.desc}`, {
+        .text(cx, y, label, {
           fontSize: "13px",
-          color: isEq ? "#fffbe6" : "#3a3530",
-          backgroundColor: isEq ? "#7b3fa0" : "#fff8e7",
-          padding: { x: 12, y: 8 },
+          color: got ? (isEq ? "#fffbe6" : "#3a3530") : "#7c7689",
+          backgroundColor: got ? (isEq ? "#7b3fa0" : "#fff8e7") : "#d2ccdb",
+          padding: { x: 12, y: 7 },
           wordWrap: { width: w - 40 },
           fixedWidth: w,
           align: "left",
         })
-        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501)
-        .setInteractive({ useHandCursor: true });
-      btn.on("pointerdown", () => {
-        this.room?.send("equipSketch", { kind });
-        sfx.accept();
-        this.time.delayedCall(160, () => this.refreshSketchBook()); // サーバー反映を待って開き直す
-      });
+        .setOrigin(0.5, 0).setScrollFactor(0).setDepth(4501);
+      if (got) {
+        btn.setInteractive({ useHandCursor: true });
+        btn.on("pointerdown", () => {
+          this.room?.send("equipSketch", { kind: def.kind });
+          sfx.accept();
+          this.time.delayedCall(160, () => this.refreshSketchBook()); // サーバー反映を待って開き直す
+        });
+      }
       objs.push(btn);
     });
 
@@ -1197,6 +1233,76 @@ export class GameScene extends Phaser.Scene {
       for (const o of this.spPanel) o.destroy();
       this.spPanel = undefined;
     }
+  }
+
+  /** ショップ（ポーション購入） */
+  private toggleShop() {
+    if (this.shopOverlay) {
+      for (const o of this.shopOverlay) o.destroy();
+      this.shopOverlay = undefined;
+      return;
+    }
+    this.closeSpPanelIfOpen();
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2;
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    const backdrop = this.add
+      .rectangle(cx, cy, this.scale.width, this.scale.height, 0x1f2a26, 0.8)
+      .setScrollFactor(0).setDepth(4500).setInteractive();
+    objs.push(backdrop);
+
+    const title = this.add
+      .text(cx, cy - 130, `🛒 えのぐ屋さん\nもってるコイン: 🪙${this.myState.coins}`, {
+        fontSize: "16px", color: "#fff8e7", align: "center", fontStyle: "bold",
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(4501);
+    objs.push(title);
+
+    const COST = 40; // サーバーの POTION_COST と合わせる
+    const canBuy = this.myState.coins >= COST;
+    const buy = this.add
+      .text(cx, cy - 40, `🧪 ポーション（HP40%かいふく）\nねだん: 🪙${COST}　もちもの: ${this.myState.potions}こ`, {
+        fontSize: "14px",
+        color: canBuy ? "#234d3f" : "#7a8a82",
+        backgroundColor: canBuy ? "#d8f0e6" : "#c2ccc7",
+        padding: { x: 14, y: 10 },
+        align: "center",
+        fixedWidth: Math.min(this.scale.width - 40, 360),
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(4501);
+    if (canBuy) {
+      buy.setInteractive({ useHandCursor: true });
+      buy.on("pointerdown", () => {
+        this.room?.send("buyPotion");
+        sfx.spend();
+        this.time.delayedCall(160, () => this.refreshShop());
+      });
+    }
+    objs.push(buy);
+
+    const hint = this.add
+      .text(cx, cy + 40, "ポーションは Pキー / 🧪ボタン で使えるよ\n（コインは てきを たおすと もらえる）", {
+        fontSize: "12px", color: "#cfe5da", align: "center",
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(4501);
+    objs.push(hint);
+
+    const close = this.add
+      .text(cx, cy + 110, "とじる", {
+        fontSize: "14px", color: "#fff8e7", backgroundColor: "#6b6257", padding: { x: 18, y: 7 },
+      })
+      .setOrigin(0.5).setScrollFactor(0).setDepth(4501)
+      .setInteractive({ useHandCursor: true });
+    close.on("pointerdown", () => this.toggleShop());
+    objs.push(close);
+
+    this.shopOverlay = objs;
+  }
+
+  private refreshShop() {
+    if (!this.shopOverlay) return;
+    this.toggleShop(); // 閉じる
+    this.toggleShop(); // 開き直す（コイン・所持数を反映）
   }
 
   /** 技コピーの発動演出（タイプ別） */
@@ -1408,6 +1514,13 @@ export class GameScene extends Phaser.Scene {
       this.lastSketchAt = now;
       this.room.send("castSketch");
       sfx.swing();
+    }
+
+    // ポーション使用（P / 🧪ボタン）。所持があれば飲む（満タンならサーバー側で弾く）
+    const potionPressed = Phaser.Input.Keyboard.JustDown(this.keys.p) || this.touch.consumePotion();
+    if (potionPressed && this.myState.potions > 0 && now - this.lastPotionAt > 800) {
+      this.lastPotionAt = now;
+      this.room.send("usePotion");
     }
 
     // 扉（重なったら自動でページ移動。到着直後は一度ゾーンを出るまで発動しない）

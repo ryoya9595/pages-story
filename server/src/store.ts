@@ -22,6 +22,8 @@ export interface PlayerRecord {
   statSpec?: number;
   sketchBook?: string;
   equippedSketch?: string;
+  coins?: number;
+  potions?: number;
   colorIdx?: number;
   updatedAt: number;
 }

@@ -62,6 +62,9 @@ export class Player extends Schema {
   // 技コピー（スケッチ）: 覚えた図鑑（"makimaki,inkdama"形式）と装備中の1つ
   @type("string") sketchBook = "";
   @type("string") equippedSketch = "";
+  // 経済: コイン（敵ドロップ）とポーション所持数
+  @type("number") coins = 0;
+  @type("number") potions = 0;
 }
 
 export class Enemy extends Schema {
@@ -93,6 +96,8 @@ const PLAYER_RESPAWN_MS = 3000;
 const REGEN_INTERVAL_MS = 1000;
 const REGEN_AFTER_DAMAGE_MS = 5000; // 被弾後この時間は回復しない
 const AUTOSAVE_INTERVAL_MS = 15000;
+const POTION_COST = 40; // ポーション1個の値段（コイン）
+const POTION_HEAL_RATIO = 0.4; // ポーションの回復量（最大HP比）
 
 interface EnemyMeta {
   def: EnemySpawnDef;
@@ -186,6 +191,26 @@ export class WorldRoom extends Room<WorldState> {
 
     // 発動: 装備中スケッチを撃つ
     this.onMessage("castSketch", (client: Client) => this.handleCastSketch(client));
+
+    // ===== ショップ（ポーション） =====
+    this.onMessage("buyPotion", (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.coins < POTION_COST) return;
+      p.coins -= POTION_COST;
+      p.potions += 1;
+      this.broadcast("bought", { sessionId: client.sessionId });
+      this.savePlayer(client.sessionId, p);
+    });
+
+    this.onMessage("usePotion", (client: Client) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.dead || p.potions <= 0 || p.hp >= p.maxHp) return; // 満タンでは無駄遣いさせない
+      p.potions -= 1;
+      const healed = Math.min(p.maxHp - p.hp, Math.round(p.maxHp * POTION_HEAL_RATIO));
+      p.hp += healed;
+      this.broadcast("potionUsed", { sessionId: client.sessionId, amount: healed });
+      this.savePlayer(client.sessionId, p);
+    });
 
     // 開発用チート（ALLOW_DEV=1 のときだけ有効。バランステスト用）
     if (process.env.ALLOW_DEV) {
@@ -337,12 +362,16 @@ export class WorldRoom extends Room<WorldState> {
       const sumLevels = contributors.reduce((s, c) => s + c.player.level, 0);
       const bonus = PARTY_BONUS[Math.min(contributors.length, PARTY_BONUS.length - 1)];
 
+      // コインドロップ（貢献者全員に。ボスは大盤振る舞い）
+      const coinDrop = Math.max(1, Math.round((2 + enemy.level * 0.7) * (enemy.boss ? 5 : 1)));
       for (const c of contributors) {
         const weight = CONTRIB_WEIGHT * (c.dmg / totalDmg) + LEVEL_WEIGHT * (c.player.level / sumLevels);
         const gain = Math.max(1, Math.round(baseExp * weight * bonus));
         this.giveExp(c.sessionId, c.player, gain);
         this.progressQuest(c.sessionId, c.player, enemy);
         this.learnSketch(c.sessionId, c.player, enemy.kind);
+        c.player.coins += coinDrop;
+        this.broadcast("coin", { sessionId: c.sessionId, amount: coinDrop });
       }
     }
     this.contrib.delete(enemyId);
@@ -603,6 +632,8 @@ export class WorldRoom extends Room<WorldState> {
       p.statSpec = (existing as any).statSpec ?? 0;
       p.sketchBook = (existing as any).sketchBook ?? "";
       p.equippedSketch = (existing as any).equippedSketch ?? "";
+      p.coins = (existing as any).coins ?? 0;
+      p.potions = (existing as any).potions ?? 0;
       p.expToNext = expToNext(p.level);
       p.maxHp = this.calcMaxHp(p);
       p.hp = p.maxHp;
@@ -651,6 +682,8 @@ export class WorldRoom extends Room<WorldState> {
       statSpec: p.statSpec,
       sketchBook: p.sketchBook,
       equippedSketch: p.equippedSketch,
+      coins: p.coins,
+      potions: p.potions,
       colorIdx: p.colorIdx,
       updatedAt: Date.now(),
     });
