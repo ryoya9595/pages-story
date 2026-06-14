@@ -549,7 +549,10 @@ export class WorldRoom extends Room<WorldState> {
 
       // ボス特殊攻撃: テレグラフ(構え)→発動。構え中は移動を止めて避ける猶予を作る
       if (e.boss && !stunned) {
-        if (meta.specialPhase === "idle" && now >= meta.specialAt) {
+        // 同じマップに生存プレイヤーがいる時だけ特殊攻撃（不在マップでの無駄撃ち防止）
+        let hasPlayer = false;
+        this.state.players.forEach((pl) => { if (!pl.dead && pl.mapId === e.mapId) hasPlayer = true; });
+        if (meta.specialPhase === "idle" && now >= meta.specialAt && hasPlayer) {
           meta.specialPhase = "windup";
           meta.windupUntil = now + BOSS_WINDUP_MS;
           meta.specialType = meta.specialType === "slam" ? "charge" : "slam"; // 交互
