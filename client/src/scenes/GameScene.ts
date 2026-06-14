@@ -793,6 +793,42 @@ export class GameScene extends Phaser.Scene {
       if (m.sessionId === room.sessionId) sfx.heal();
     });
 
+    // ボス特殊攻撃: 構え（テレグラフ）。赤い危険範囲を見せて避けさせる
+    room.onMessage("bossWarn", (m: { enemyId: string; type: string; x: number; y: number }) => {
+      const e = this.enemies.get(m.enemyId);
+      if (!e || e.state.mapId !== this.currentMapId) return;
+      sfx.hurt();
+      if (m.type === "slam") {
+        const ring = this.add.circle(m.x, m.y, 30, 0xff3b3b, 0).setStrokeStyle(5, 0xff3b3b, 0.85).setDepth(160);
+        this.tweens.add({ targets: ring, radius: 250, duration: 900 });
+        this.tweens.add({ targets: ring, alpha: 0.4, duration: 220, yoyo: true, repeat: 3 });
+        this.time.delayedCall(950, () => ring.destroy());
+      } else {
+        const bar = this.add.rectangle(m.x, m.y, 760, 60, 0xff3b3b, 0.22).setDepth(160);
+        this.tweens.add({ targets: bar, alpha: 0.55, duration: 220, yoyo: true, repeat: 3, onComplete: () => bar.destroy() });
+      }
+      const warn = this.add
+        .text(m.x, m.y - 74, "！", { fontSize: "40px", color: "#ff2b2b", fontStyle: "bold", stroke: "#ffffff", strokeThickness: 5 })
+        .setOrigin(0.5).setDepth(300);
+      this.tweens.add({ targets: warn, y: warn.y - 14, alpha: 0, duration: 950, onComplete: () => warn.destroy() });
+    });
+
+    // ボス特殊攻撃: 発動の着弾演出
+    room.onMessage("bossAttack", (m: { enemyId: string; type: string; x?: number; y: number; range?: number; x0?: number; x1?: number }) => {
+      const e = this.enemies.get(m.enemyId);
+      if (!e || e.state.mapId !== this.currentMapId) return;
+      this.cameras.main.shake(220, 0.011);
+      sfx.hit();
+      if (m.type === "slam") {
+        const burst = this.add.circle(m.x!, m.y, 30, 0xff6a3b, 0.5).setDepth(170);
+        this.tweens.add({ targets: burst, radius: m.range ?? 250, alpha: 0, duration: 320, onComplete: () => burst.destroy() });
+      } else {
+        const cx = ((m.x0 ?? 0) + (m.x1 ?? 0)) / 2;
+        const streak = this.add.rectangle(cx, m.y, Math.abs((m.x1 ?? 0) - (m.x0 ?? 0)), 70, 0xffaa55, 0.5).setDepth(170);
+        this.tweens.add({ targets: streak, alpha: 0, scaleY: 1.4, duration: 300, onComplete: () => streak.destroy() });
+      }
+    });
+
     room.onMessage("questAccepted", (m: { sessionId: string; questId: string }) => {
       if (m.sessionId !== room.sessionId || !this.me) return;
       const q = QUESTS[m.questId];

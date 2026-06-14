@@ -105,7 +105,18 @@ interface EnemyMeta {
   respawnAt: number;
   touchCooldown: Map<string, number>;
   stunnedUntil: number; // けしゴムプレス等でスタン中はこの時刻まで動かない
+  // ボス専用: 特殊攻撃（テレグラフ→発動）の状態機械
+  specialAt: number; // 次に特殊攻撃を始める時刻
+  windupUntil: number; // 構え（テレグラフ）の終了時刻
+  specialPhase: "idle" | "windup";
+  specialType: "slam" | "charge";
 }
+
+const BOSS_SPECIAL_INTERVAL_MS = 6000; // 特殊攻撃の間隔
+const BOSS_WINDUP_MS = 950; // 構え（避ける猶予）
+const BOSS_SLAM_RANGE_X = 250;
+const BOSS_SLAM_RANGE_Y = 170;
+const BOSS_CHARGE_DIST = 340;
 
 export class WorldRoom extends Room<WorldState> {
   maxClients = 4;
@@ -296,7 +307,10 @@ export class WorldRoom extends Room<WorldState> {
         e.hp = stats.maxHp;
         e.maxHp = stats.maxHp;
         this.state.enemies.set(def.id, e);
-        this.enemyMeta.set(def.id, { def, dir: 1, respawnAt: 0, touchCooldown: new Map(), stunnedUntil: 0 });
+        this.enemyMeta.set(def.id, {
+          def, dir: 1, respawnAt: 0, touchCooldown: new Map(), stunnedUntil: 0,
+          specialAt: Date.now() + 4000, windupUntil: 0, specialPhase: "idle", specialType: "slam",
+        });
       }
     }
   }
@@ -533,9 +547,24 @@ export class WorldRoom extends Room<WorldState> {
       // スタン中（けしゴムプレス等）は動かず・触れてもダメージを出さない
       const stunned = now < meta.stunnedUntil;
 
-      // パトロール移動
+      // ボス特殊攻撃: テレグラフ(構え)→発動。構え中は移動を止めて避ける猶予を作る
+      if (e.boss && !stunned) {
+        if (meta.specialPhase === "idle" && now >= meta.specialAt) {
+          meta.specialPhase = "windup";
+          meta.windupUntil = now + BOSS_WINDUP_MS;
+          meta.specialType = meta.specialType === "slam" ? "charge" : "slam"; // 交互
+          this.broadcast("bossWarn", { enemyId: id, type: meta.specialType, x: e.x, y: e.y });
+        } else if (meta.specialPhase === "windup" && now >= meta.windupUntil) {
+          this.executeBossSpecial(id, e, meta, now);
+          meta.specialPhase = "idle";
+          meta.specialAt = now + BOSS_SPECIAL_INTERVAL_MS;
+        }
+      }
+      const bossWindup = e.boss && meta.specialPhase === "windup";
+
+      // パトロール移動（スタン中・ボスの構え中は止まる）
       const stats = enemyStats(e.level, e.boss);
-      if (!stunned) {
+      if (!stunned && !bossWindup) {
         e.x += meta.dir * stats.speed * dt;
         if (e.x >= meta.def.patrolMax) meta.dir = -1;
         if (e.x <= meta.def.patrolMin) meta.dir = 1;
@@ -576,6 +605,59 @@ export class WorldRoom extends Room<WorldState> {
         p.hp = Math.min(p.maxHp, p.hp + Math.max(1, Math.round(p.maxHp * 0.04)));
       });
     }
+  }
+
+  /** ボスの特殊攻撃を発動（構え終了時に呼ばれる） */
+  private executeBossSpecial(id: string, e: Enemy, meta: EnemyMeta, now: number) {
+    const stats = enemyStats(e.level, e.boss);
+    const dmg = Math.round(stats.touchDmg * 2.2); // 通常タッチの2.2倍の痛恨の一撃
+    const map = MAPS[e.mapId];
+
+    if (meta.specialType === "slam") {
+      // 範囲スタンプ: ボス周囲の全員に大ダメージ＋ノックバック
+      this.state.players.forEach((p, sid) => {
+        if (p.dead || p.mapId !== e.mapId) return;
+        if (Math.abs(p.x - e.x) > BOSS_SLAM_RANGE_X || Math.abs(p.y - e.y) > BOSS_SLAM_RANGE_Y) return;
+        const kx = p.x < e.x ? -60 : 60;
+        p.x = Math.max(0, Math.min(map.width, p.x + kx));
+        this.applyBossDamage(sid, p, dmg, now);
+      });
+      this.broadcast("bossAttack", { enemyId: id, type: "slam", x: e.x, y: e.y, range: BOSS_SLAM_RANGE_X });
+    } else {
+      // 突進: 一番近いプレイヤーへ大きく踏み込み、通り道の全員を薙ぐ
+      let target: Player | undefined;
+      let best = Infinity;
+      this.state.players.forEach((p) => {
+        if (p.dead || p.mapId !== e.mapId) return;
+        const d = Math.abs(p.x - e.x);
+        if (d < best) { best = d; target = p; }
+      });
+      const dir = target && target.x < e.x ? -1 : 1;
+      const x0 = e.x;
+      const x1 = Math.max(0, Math.min(map.width, e.x + dir * BOSS_CHARGE_DIST));
+      e.x = x1;
+      e.flip = dir < 0;
+      const lo = Math.min(x0, x1) - 40;
+      const hi = Math.max(x0, x1) + 40;
+      this.state.players.forEach((p, sid) => {
+        if (p.dead || p.mapId !== e.mapId) return;
+        if (p.x < lo || p.x > hi || Math.abs(p.y - e.y) > 80) return;
+        p.x = Math.max(0, Math.min(map.width, p.x + dir * 50));
+        this.applyBossDamage(sid, p, dmg, now);
+      });
+      this.broadcast("bossAttack", { enemyId: id, type: "charge", x0, x1, y: e.y });
+    }
+  }
+
+  /** ボス攻撃の被ダメージ適用（クレヨンの防御・スケッチのシールドも効く） */
+  private applyBossDamage(sessionId: string, p: Player, dmg: number, now: number) {
+    let d = dmg;
+    if (this.rootJob(p.job) === "crayon") d = Math.max(1, Math.round(d * (1 - p.statSpec * 0.03)));
+    if (now < (this.shieldUntil.get(sessionId) || 0)) d = Math.max(1, Math.round(d * SHIELD_DMG_MUL));
+    p.hp = Math.max(0, p.hp - d);
+    this.lastDamagedAt.set(sessionId, now);
+    this.broadcast("playerHit", { sessionId, dmg: d });
+    if (p.hp <= 0) this.killPlayer(sessionId, p);
   }
 
   private killPlayer(sessionId: string, p: Player) {
