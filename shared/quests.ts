@@ -98,5 +98,66 @@ export const QUESTS: Record<string, QuestDef> = {
     targetCount: 1,
     targetBoss: true,
     rewardExp: 12000,
+    next: "q10",
+  },
+
+  // ===== 第4章へつなぐ：おえかきのやま（peak）=====
+  q10: {
+    id: "q10", title: "おえかきのやまへ",
+    text: "しろいページの先、おえかきのやまへ。モンスターを 5たい たおそう",
+    targetMap: "peak", targetCount: 5, rewardExp: 18000, next: "q11",
+  },
+  q11: {
+    id: "q11", title: "やまのぬし",
+    text: "おえかきのやまのボスを たおそう！（なかま すいしょう）",
+    targetMap: "peak", targetCount: 1, targetBoss: true, rewardExp: 35000, next: "q12",
+  },
+
+  // ===== 第4章 よるのものがたり =====
+  q12: {
+    id: "q12", title: "つきよのページ",
+    text: "やまの扉から つきよのページへ。よるのラクガキを 5たい たおそう",
+    targetMap: "moonpage", targetCount: 5, rewardExp: 48000, next: "q13",
+  },
+  q13: {
+    id: "q13", title: "こもりうたのぬし",
+    text: "ゆめのおくの『こもりうたの間』で ねむりぐまを たおそう！",
+    targetMap: "lullaby", targetCount: 1, targetBoss: true, rewardExp: 95000, next: "q14",
+  },
+
+  // ===== 第5章 あらしのうみ =====
+  q14: {
+    id: "q14", title: "あらしのうみ",
+    text: "あらしのうみの モンスターを 6たい たおそう",
+    targetMap: "storm", targetCount: 6, rewardExp: 130000, next: "q15",
+  },
+  q15: {
+    id: "q15", title: "うずまきのぬし",
+    text: "うずまきの底で らいうゴーレムを たおそう！",
+    targetMap: "maelstrom", targetCount: 1, targetBoss: true, rewardExp: 230000, next: "q16",
+  },
+
+  // ===== 第6章 にじのかなた =====
+  q16: {
+    id: "q16", title: "にじのかけはし",
+    text: "にじのかけはしの モンスターを 6たい たおそう",
+    targetMap: "rainbow", targetCount: 6, rewardExp: 310000, next: "q17",
+  },
+  q17: {
+    id: "q17", title: "いろどりのぬし",
+    text: "おーろらの空で いろどりの主を たおそう！",
+    targetMap: "aurora", targetCount: 1, targetBoss: true, rewardExp: 520000, next: "q18",
+  },
+
+  // ===== 第7章 さいごのページ =====
+  q18: {
+    id: "q18", title: "せかいのふち",
+    text: "せかいのふちの モンスターを 6たい たおそう",
+    targetMap: "edge", targetCount: 6, rewardExp: 680000, next: "q19",
+  },
+  q19: {
+    id: "q19", title: "さいごのいちまい",
+    text: "さいごのいちまいで ラクガキ大王を たおし、絵本を 完成させよう！",
+    targetMap: "finale", targetCount: 1, targetBoss: true, rewardExp: 1500000,
   },
 };

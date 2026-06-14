@@ -109,6 +109,11 @@ export const LEVEL_WEIGHT = 0.5;
 
 // ===== マップ定義 =====
 
+// 各マップに置く道案内の妖精（しおりの妖精）。クエストの受注・報告窓口を常に近くに。
+const guideFairy = (x = 300): NpcDef => ({
+  id: "shiori", key: "npc_shiori", x, y: 604, name: "しおりの妖精", lines: [], float: true,
+});
+
 export const MAPS: Record<string, MapDef> = {
   hub: {
     id: "hub",
@@ -193,7 +198,7 @@ export const MAPS: Record<string, MapDef> = {
       { x: 910, y1: 387, y2: 656 },
       { x: 1420, y1: 467, y2: 656 },
     ],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   swamp: {
     id: "swamp",
@@ -224,7 +229,7 @@ export const MAPS: Record<string, MapDef> = {
       { x: 950, y1: 397, y2: 656 },
       { x: 1450, y1: 477, y2: 656 },
     ],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   blank: {
     id: "blank",
@@ -256,7 +261,7 @@ export const MAPS: Record<string, MapDef> = {
       { x: 900, y1: 407, y2: 656 },
       { x: 1750, y1: 467, y2: 656 },
     ],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   sky: {
     id: "sky", name: "くものページ", width: 2200, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -272,7 +277,7 @@ export const MAPS: Record<string, MapDef> = {
     ],
     doors: [{ id: "to-hub", x: 140, y: 612, toMap: "hub", toX: 60, toY: 612, label: "←もくじ広場へ" }],
     ladders: [{ x: 750, y1: 397, y2: 656 }, { x: 1450, y1: 417, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   cave: {
     id: "cave", name: "インクのどうくつ", width: 2200, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -287,7 +292,7 @@ export const MAPS: Record<string, MapDef> = {
     ],
     doors: [{ id: "to-forest", x: 140, y: 612, toMap: "forest", toX: 1100, toY: 612, label: "←らくがきの森へ" }],
     ladders: [{ x: 950, y1: 387, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   beach: {
     id: "beach", name: "ゆうやけのうみべ", width: 2200, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -302,7 +307,7 @@ export const MAPS: Record<string, MapDef> = {
     ],
     doors: [{ id: "to-swamp", x: 140, y: 612, toMap: "swamp", toX: 1200, toY: 612, label: "←インクのぬまへ" }],
     ladders: [{ x: 1050, y1: 407, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   peak: {
     id: "peak", name: "おえかきのやま", width: 2400, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -322,7 +327,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-moonpage", x: 2344, y: 612, toMap: "moonpage", toX: 140, toY: 612, label: "つきよのページ→" },
     ],
     ladders: [{ x: 900, y1: 417, y2: 656 }, { x: 1800, y1: 447, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
 
   // ============ 第4章 よるのものがたり（Lv40-55）============
@@ -343,7 +348,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-dream", x: 2144, y: 612, toMap: "dream", toX: 140, toY: 612, label: "ゆめのなかへ→" },
     ],
     ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 477, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   dream: {
     id: "dream", name: "ゆめのなか", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -362,7 +367,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-lullaby", x: 2244, y: 612, toMap: "lullaby", toX: 140, toY: 612, label: "こもりうたの間へ→" },
     ],
     ladders: [{ x: 980, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   lullaby: {
     id: "lullaby", name: "こもりうたの間", width: 2000, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -380,7 +385,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-storm", x: 1944, y: 612, toMap: "storm", toX: 140, toY: 612, label: "あらしのうみへ→" },
     ],
     ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
 
   // ============ 第5章 あらしのうみ（Lv55-70）============
@@ -401,7 +406,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-thunder", x: 2244, y: 612, toMap: "thunder", toX: 140, toY: 612, label: "かみなりだいちへ→" },
     ],
     ladders: [{ x: 980, y1: 397, y2: 656 }, { x: 1500, y1: 477, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   thunder: {
     id: "thunder", name: "かみなりだいち", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -420,7 +425,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-maelstrom", x: 2244, y: 612, toMap: "maelstrom", toX: 140, toY: 612, label: "うずまきの底へ→" },
     ],
     ladders: [{ x: 1000, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   maelstrom: {
     id: "maelstrom", name: "うずまきの底", width: 2000, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -438,7 +443,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-rainbow", x: 1944, y: 612, toMap: "rainbow", toX: 140, toY: 612, label: "にじのかけはしへ→" },
     ],
     ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
 
   // ============ 第6章 にじのかなた（Lv70-85）============
@@ -459,7 +464,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-prism", x: 2344, y: 612, toMap: "prism", toX: 140, toY: 612, label: "ひかりのプリズムへ→" },
     ],
     ladders: [{ x: 1000, y1: 397, y2: 656 }, { x: 1500, y1: 477, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   prism: {
     id: "prism", name: "ひかりのプリズム", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -478,7 +483,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-aurora", x: 2244, y: 612, toMap: "aurora", toX: 140, toY: 612, label: "おーろらの空へ→" },
     ],
     ladders: [{ x: 1000, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   aurora: {
     id: "aurora", name: "おーろらの空", width: 2000, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -496,7 +501,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-edge", x: 1944, y: 612, toMap: "edge", toX: 140, toY: 612, label: "せかいのふちへ→" },
     ],
     ladders: [{ x: 950, y1: 397, y2: 656 }, { x: 1450, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
 
   // ============ 第7章 さいごのページ（Lv85-100）============
@@ -517,7 +522,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-tobira", x: 2344, y: 612, toMap: "tobira", toX: 140, toY: 612, label: "かきかけのトビラへ→" },
     ],
     ladders: [{ x: 1000, y1: 397, y2: 656 }, { x: 1500, y1: 477, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   tobira: {
     id: "tobira", name: "かきかけのトビラ", width: 2300, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -536,7 +541,7 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-finale", x: 2244, y: 612, toMap: "finale", toX: 140, toY: 612, label: "さいごのいちまいへ→" },
     ],
     ladders: [{ x: 1000, y1: 387, y2: 656 }, { x: 1500, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
   finale: {
     id: "finale", name: "さいごのいちまい", width: 2200, height: WORLD_H, spawnX: 140, spawnY: 560,
@@ -553,6 +558,6 @@ export const MAPS: Record<string, MapDef> = {
       { id: "to-tobira", x: 140, y: 612, toMap: "tobira", toX: 2244, toY: 612, label: "←かきかけのトビラへ" },
     ],
     ladders: [{ x: 1000, y1: 397, y2: 656 }, { x: 1550, y1: 467, y2: 656 }],
-    npcs: [],
+    npcs: [guideFairy()],
   },
 };
