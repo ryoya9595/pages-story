@@ -9,6 +9,7 @@ import { bgm } from "../bgm";
 import { sfx } from "../sfx";
 import { getProfile } from "../profile";
 import { PROD_SERVER_HOST } from "../serverConfig";
+import { LocalRoom } from "../localRoom";
 import { QUESTS } from "../../../shared/quests";
 import { SKETCHES, parseSketchBook, type SketchDef } from "../../../shared/sketches";
 import {
@@ -52,7 +53,7 @@ type EnemyEntry = {
 };
 
 export class GameScene extends Phaser.Scene {
-  private room?: Room;
+  private room?: Room | LocalRoom;
   private me?: Phaser.Physics.Arcade.Sprite;
   private myState?: any;
   private myLabel?: Phaser.GameObjects.Text;
@@ -101,39 +102,39 @@ export class GameScene extends Phaser.Scene {
 
   preload() {
     // フリー背景素材（CC0 / OpenGameArt ansimuz: Magic Cliffs, Mountain Dusk）
-    this.load.image("bg_cliffs_sky", "/assets/bg/cliffs/sky.png");
-    this.load.image("bg_cliffs_clouds", "/assets/bg/cliffs/clouds.png");
-    this.load.image("bg_cliffs_sea", "/assets/bg/cliffs/sea.png");
-    this.load.image("bg_cliffs_far", "/assets/bg/cliffs/far-grounds.png");
-    this.load.image("bg_dusk_bg", "/assets/bg/dusk/parallax-mountain-bg.png");
-    this.load.image("bg_dusk_far", "/assets/bg/dusk/parallax-mountain-montain-far.png");
-    this.load.image("bg_dusk_mountains", "/assets/bg/dusk/parallax-mountain-mountains.png");
-    this.load.image("bg_dusk_trees", "/assets/bg/dusk/parallax-mountain-trees.png");
-    this.load.image("bg_dusk_fg", "/assets/bg/dusk/parallax-mountain-foreground-trees.png");
+    this.load.image("bg_cliffs_sky", "assets/bg/cliffs/sky.png");
+    this.load.image("bg_cliffs_clouds", "assets/bg/cliffs/clouds.png");
+    this.load.image("bg_cliffs_sea", "assets/bg/cliffs/sea.png");
+    this.load.image("bg_cliffs_far", "assets/bg/cliffs/far-grounds.png");
+    this.load.image("bg_dusk_bg", "assets/bg/dusk/parallax-mountain-bg.png");
+    this.load.image("bg_dusk_far", "assets/bg/dusk/parallax-mountain-montain-far.png");
+    this.load.image("bg_dusk_mountains", "assets/bg/dusk/parallax-mountain-mountains.png");
+    this.load.image("bg_dusk_trees", "assets/bg/dusk/parallax-mountain-trees.png");
+    this.load.image("bg_dusk_fg", "assets/bg/dusk/parallax-mountain-foreground-trees.png");
 
     // 敵スプライト（AI生成オリジナル）。読み込めればこちらが優先され、
     // 無ければ pixelart.ts のコード製ドットに自動フォールバックする（同名キーのため）
-    this.load.image("enemy_makimaki", "/assets/enemies/makimaki.png");
-    this.load.image("enemy_inkdama", "/assets/enemies/inkdama.png");
-    this.load.image("enemy_kinoko", "/assets/enemies/kinoko.png");
-    this.load.image("enemy_rafbear", "/assets/enemies/rafbear.png");
+    this.load.image("enemy_makimaki", "assets/enemies/makimaki.png");
+    this.load.image("enemy_inkdama", "assets/enemies/inkdama.png");
+    this.load.image("enemy_kinoko", "assets/enemies/kinoko.png");
+    this.load.image("enemy_rafbear", "assets/enemies/rafbear.png");
 
-    this.load.image("enemy_keshiboo", "/assets/enemies/keshiboo.png");
-    this.load.image("enemy_fudemushi", "/assets/enemies/fudemushi.png");
-    this.load.image("enemy_golem", "/assets/enemies/enogu_golem.png");
+    this.load.image("enemy_keshiboo", "assets/enemies/keshiboo.png");
+    this.load.image("enemy_fudemushi", "assets/enemies/fudemushi.png");
+    this.load.image("enemy_golem", "assets/enemies/enogu_golem.png");
 
     // NPC（AI生成オリジナル）
-    this.load.image("npc_shiori", "/assets/npc/shiori.png");
-    this.load.image("npc_elder", "/assets/npc/elder.png");
+    this.load.image("npc_shiori", "assets/npc/shiori.png");
+    this.load.image("npc_elder", "assets/npc/elder.png");
 
     // インクのぬま背景（AI生成）
-    this.load.image("bg_swamp", "/assets/bg/ink_swamp.png");
+    this.load.image("bg_swamp", "assets/bg/ink_swamp.png");
 
     // 主人公スプライト（The Adventurer by sscary / 無料・商用OK）48×64×8フレーム
     for (const v of ["m", "f"]) {
-      this.load.spritesheet(`hero_${v}_idle`, `/assets/char/${v}_idle.png`, { frameWidth: 48, frameHeight: 64 });
-      this.load.spritesheet(`hero_${v}_walk`, `/assets/char/${v}_walk.png`, { frameWidth: 48, frameHeight: 64 });
-      this.load.spritesheet(`hero_${v}_jump`, `/assets/char/${v}_jump.png`, { frameWidth: 48, frameHeight: 64 });
+      this.load.spritesheet(`hero_${v}_idle`, `assets/char/${v}_idle.png`, { frameWidth: 48, frameHeight: 64 });
+      this.load.spritesheet(`hero_${v}_walk`, `assets/char/${v}_walk.png`, { frameWidth: 48, frameHeight: 64 });
+      this.load.spritesheet(`hero_${v}_jump`, `assets/char/${v}_jump.png`, { frameWidth: 48, frameHeight: 64 });
     }
   }
 
@@ -537,16 +538,16 @@ export class GameScene extends Phaser.Scene {
     //  2. デプロイ先（localhost/LAN以外）なら本番サーバー PROD_SERVER_HOST（fly.io）へ
     //     → これで固定URLが ?server 無しでも繋がる
     //  3. localhost/LAN ならローカルサーバー（同ホストの :2567）へ＝開発用
-    const serverParam = new URLSearchParams(location.search).get("server");
+    const params = new URLSearchParams(location.search);
+    const serverParam = params.get("server");
     const host = location.hostname;
     const isLocalDev =
       host === "localhost" || host === "127.0.0.1" || /^(\d{1,3}\.){3}\d{1,3}$/.test(host);
-    const endpoint = serverParam
-      ? `wss://${serverParam}`
-      : !isLocalDev && PROD_SERVER_HOST
-      ? `wss://${PROD_SERVER_HOST}`
-      : `${location.protocol === "https:" ? "wss" : "ws"}://${host}:2567`;
-    const client = new Client(endpoint);
+    // オンライン接続先（無ければソロ）: ?server= > localhostの:2567 > 本番ホスト
+    const onlineTarget = serverParam || (isLocalDev ? `${host}:2567` : PROD_SERVER_HOST || "");
+    // ソロ判定: ?solo=1 の強制、または接続先が無い（GitHub Pages等の静的ホスティング）
+    const wantSolo = params.has("solo") || !onlineTarget;
+
     const keyword = getKeyword();
     const profile = getProfile();
     const joinOpts = {
@@ -555,24 +556,38 @@ export class GameScene extends Phaser.Scene {
       ...(profile.name ? { name: profile.name } : {}),
       ...(profile.charIdx >= 0 ? { charIdx: profile.charIdx } : {}),
     };
-    let room: Room;
-    try {
-      room = await client.joinOrCreate("world", joinOpts);
-    } catch (e) {
-      // 認証不整合（サーバーデータ消去後・別端末で重複ログイン等）の時だけIDを作り直す。
-      // サーバーダウン等の通信エラーでデータを捨てないこと！
-      const msg = String((e as any)?.message ?? e);
-      if (msg.includes("auth_mismatch")) {
-        console.warn("auth mismatch — IDを作り直して再入室:", e);
-        resetIdentity();
-        room = await client.joinOrCreate("world", { ...joinOpts, ...getIdentity() });
-      } else {
-        throw e;
+
+    let room: Room | LocalRoom;
+    if (wantSolo) {
+      // サーバー無しでも1人で遊べるソロモード（セーブはこの端末のブラウザに保存）
+      room = new LocalRoom({ name: profile.name, charIdx: profile.charIdx });
+    } else {
+      const endpoint = serverParam
+        ? `wss://${serverParam}`
+        : isLocalDev
+        ? `${location.protocol === "https:" ? "wss" : "ws"}://${host}:2567`
+        : `wss://${PROD_SERVER_HOST}`;
+      const client = new Client(endpoint);
+      try {
+        room = await client.joinOrCreate("world", joinOpts);
+      } catch (e) {
+        const msg = String((e as any)?.message ?? e);
+        if (msg.includes("auth_mismatch")) {
+          console.warn("auth mismatch — IDを作り直して再入室:", e);
+          resetIdentity();
+          room = await client.joinOrCreate("world", { ...joinOpts, ...getIdentity() });
+        } else {
+          // サーバーに繋がらない → ソロモードにフォールバック（遊べなくなるより1人で遊べる方が良い）
+          console.warn("サーバー接続に失敗。ソロモードで開始します:", e);
+          room = new LocalRoom({ name: profile.name, charIdx: profile.charIdx });
+        }
       }
     }
     this.room = room;
+    const isSolo = room instanceof LocalRoom;
 
-    // 引き継ぎコード表示（クリックでコピー）
+    // 引き継ぎコード＆あいことば（マルチ通信用。ソロモードでは意味がないので非表示）
+    if (!isSolo) {
     const codeBtn = this.add
       .text(this.scale.width - 10, 10, "ひきつぎコード", {
         fontSize: "13px",
@@ -614,7 +629,8 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.scale.on("resize", () => kwBtn.setPosition(this.scale.width - 10, 36));
-    const $ = getStateCallbacks(room);
+    }
+    const $ = isSolo ? ((x: any) => x) : getStateCallbacks(room as Room);
 
     $(room.state).players.onAdd((player: any, sessionId: string) => {
       if (sessionId === room.sessionId) {

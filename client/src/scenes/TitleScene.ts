@@ -21,9 +21,9 @@ export class TitleScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image("title_art", "/assets/ui/title.png");
-    this.load.spritesheet("hero_m_idle", "/assets/char/m_idle.png", { frameWidth: 48, frameHeight: 64 });
-    this.load.spritesheet("hero_f_idle", "/assets/char/f_idle.png", { frameWidth: 48, frameHeight: 64 });
+    this.load.image("title_art", "assets/ui/title.png");
+    this.load.spritesheet("hero_m_idle", "assets/char/m_idle.png", { frameWidth: 48, frameHeight: 64 });
+    this.load.spritesheet("hero_f_idle", "assets/char/f_idle.png", { frameWidth: 48, frameHeight: 64 });
   }
 
   create() {

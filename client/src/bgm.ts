@@ -44,7 +44,7 @@ const STORAGE_KEY = "pages-story-bgm";
 
 // フリーBGMファイルを置く場所（優先して再生される）
 // client/public/bgm/field.mp3 ← ここにmp3を置くだけでOK。無ければ内蔵チップチューンで鳴る
-const BGM_FILE = "/bgm/field.mp3";
+const BGM_FILE = "bgm/field.mp3";
 
 export class Bgm {
   private ctx?: AudioContext;
@@ -60,7 +60,7 @@ export class Bgm {
 
   /** マップの雰囲気に合わせて曲を切り替える（/bgm/<name>.mp3） */
   setTrack(name: string) {
-    const file = `/bgm/${name}.mp3`;
+    const file = `bgm/${name}.mp3`;
     if (this.currentFile === file) return;
     this.currentFile = file;
     if (!this.started || !this.enabled || !this.audioEl) return; // ファイル再生中のときだけ即切り替え
