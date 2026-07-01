@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAGESストーリー あそびかた説明書</title>
+<style>
+  :root{
+    --ink:#3a3530; --sub:#6b6257; --paper:#fbf6ea; --paper2:#f4ecd8;
+    --line:#e3d8bf; --accent:#7b3fa0; --accent2:#1e7d64; --gold:#c8961e;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper2); color:var(--ink);
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    line-height:1.85; -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:0 18px 80px}
+  header{
+    text-align:center; padding:44px 18px 30px;
+    background:linear-gradient(180deg,#efe5cd,#f4ecd8);
+    border-bottom:3px solid var(--line);
+  }
+  header .eyebrow{color:var(--gold); font-weight:700; letter-spacing:.15em; font-size:13px}
+  header h1{margin:.2em 0 .1em; font-size:30px; letter-spacing:.02em}
+  header .sub{color:var(--sub); font-size:15px}
+  .play{
+    display:inline-block; margin-top:22px; padding:14px 34px; border-radius:999px;
+    background:var(--accent2); color:#fff; text-decoration:none; font-weight:700; font-size:17px;
+    box-shadow:0 4px 0 #14614d; transition:transform .1s;
+  }
+  .play:active{transform:translateY(3px); box-shadow:0 1px 0 #14614d}
+  h2{
+    margin:44px 0 14px; padding:8px 0 8px 14px; font-size:21px;
+    border-left:6px solid var(--accent); background:var(--paper);
+  }
+  h3{margin:24px 0 6px; font-size:16px; color:var(--accent)}
+  p{margin:.5em 0}
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:14px 0}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:14.5px}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left}
+  th{background:var(--paper); color:var(--sub); white-space:nowrap}
+  .key{display:inline-block; min-width:28px; text-align:center; padding:2px 8px; margin:1px;
+    background:#fff; border:1px solid #cbbf9f; border-bottom-width:3px; border-radius:6px; font-weight:700; font-size:13px}
+  ul{padding-left:1.3em; margin:.4em 0}
+  li{margin:.3em 0}
+  .tip{background:#eef7f1; border:1px solid #cfe7d8; border-radius:12px; padding:12px 16px; margin:12px 0}
+  .tip b{color:var(--accent2)}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media(max-width:560px){.grid{grid-template-columns:1fr}}
+  .job{background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:12px 14px}
+  .job .h{font-weight:700; font-size:15px}
+  footer{text-align:center; color:var(--sub); font-size:12px; margin-top:50px; line-height:1.7}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">あそびかた説明書</div>
+  <h1>PAGESストーリー</h1>
+  <div class="sub">〜 描きかけの絵本の国 〜</div>
+  <a class="play" href="./index.html">▶ ゲームをはじめる</a>
+</header>
+
+<div class="wrap">
+
+  <h2>🎮 どんなゲーム？</h2>
+  <div class="card">
+    <p>描きかけの絵本に迷いこんだ主人公が、あばれる「ラクガキ」たちを倒しながら、
+    白紙のページを冒険していく<b>探索型アクションRPG</b>です。</p>
+    <p>敵を倒してレベルを上げ、<b>4つの画材ロール</b>に転職し、さらに枝分かれして最大 <b>Lv100・28職業</b>へ。
+    倒した敵の技を写しとる<b>「スケッチ（技コピー）」</b>が最大の特徴。全20ステージ、ラスボスは「ラクガキ大王」！</p>
+    <p style="color:var(--sub);font-size:14px;margin-top:10px">※ブラウザだけで遊べます。インストール不要・無料。データはこの端末に自動保存されます。</p>
+  </div>
+
+  <h2>🕹 そうさ方法</h2>
+  <div class="grid">
+    <div class="card">
+      <h3 style="margin-top:0">パソコン（キーボード）</h3>
+      <table>
+        <tr><td><span class="key">←</span><span class="key">→</span> / <span class="key">A</span><span class="key">D</span></td><td>いどう</td></tr>
+        <tr><td><span class="key">↑</span> / <span class="key">W</span> / <span class="key">Space</span></td><td>ジャンプ</td></tr>
+        <tr><td><span class="key">↑</span><span class="key">↓</span></td><td>はしごの のぼりおり</td></tr>
+        <tr><td><span class="key">J</span> / <span class="key">X</span></td><td>こうげき</td></tr>
+        <tr><td><span class="key">K</span></td><td>とくぎ（スケッチ）</td></tr>
+        <tr><td><span class="key">H</span></td><td>かいふく（パレット職）</td></tr>
+        <tr><td><span class="key">P</span></td><td>ポーションを のむ</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">スマホ（タッチ）</h3>
+      <ul>
+        <li><b>画面左半分をドラッグ</b>＝いどう（上下でハシゴ）</li>
+        <li><b>とぶ</b>ボタン＝ジャンプ</li>
+        <li><b>⚔こうげき</b>ボタン＝攻撃</li>
+        <li><b>✨とくぎ</b>ボタン＝スケッチ発動</li>
+        <li><b>🧪</b>ボタン＝ポーション</li>
+        <li><b>かいふく</b>ボタン＝回復（パレット職のみ）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>📈 レベルと転職</h2>
+  <div class="card">
+    <p>敵を倒すと経験値がたまってレベルアップ。<b>レベルアップごとにSP（スキルポイント）+3</b>がもらえ、
+    こうげき・HP・すばやさ・職業固有ステータスに振り分けられます（✨SPボタン）。</p>
+    <p>決まったレベルで<b>「しおりの妖精」</b>のところに転職画面が出ます。道は分岐制で、<b>あとから変えられません</b>。</p>
+    <table>
+      <tr><th>Lv5</th><td>1次転職 … 4つの画材ロールへ</td></tr>
+      <tr><th>Lv20</th><td>2次転職 … 各ロールが2系統に分岐</td></tr>
+      <tr><th>Lv35</th><td>3次転職 … 系譜を深める</td></tr>
+      <tr><th>Lv50</th><td>4次転職 … 最終職（全28職）</td></tr>
+    </table>
+    <div class="grid" style="margin-top:12px">
+      <div class="job"><div class="h">✏️ エンピツ系</div>近接アタッカー。攻撃力が高い。とくぎの威力もUP。</div>
+      <div class="job"><div class="h">🖍️ クレヨン系</div>タンク。とにかく硬い。とくぎ発動で自分にガード。</div>
+      <div class="job"><div class="h">🖋️ インク系</div>遠距離。離れて撃つ。とくぎの射程・範囲がのびる。</div>
+      <div class="job"><div class="h">🎨 パレット系</div>回復サポート。仲間を癒す。とくぎで周囲も回復。</div>
+    </div>
+  </div>
+
+  <h2>✨ 技コピー（スケッチ）</h2>
+  <div class="card">
+    <p>このゲームの<b>いちばんの個性</b>。敵を<b>初めて倒すと、その敵の技をスケッチ（習得）</b>します。
+    覚えた技は「📕スケッチ図鑑」から1つ装備して、<b>とくぎボタン（Kキー）</b>で発動！</p>
+    <ul>
+      <li>🌀 <b>からスピン</b>（マキマキ）…前方に突進する多段ヒット</li>
+      <li>💥 <b>インクスプラッシュ</b>（インクだまり）…自分の周りを範囲攻撃</li>
+      <li>🍄 <b>ほうしクラウド</b>（ヌリカケキノコ）…前方に継続ダメージの雲</li>
+      <li>🧽 <b>けしゴムプレス</b>（ケシブー）…敵をノックバック＆スタン</li>
+      <li>🖌️ <b>ふでなぎ</b>（フデムシ）…縦に広いなぎ払い</li>
+      <li>🛡️ <b>えのぐシールド</b>（エノグゴーレム）…数秒 被ダメ半減</li>
+      <li>🐻 <b>ラフスマッシュ</b>（ラフベアー）…超高威力の一撃</li>
+    </ul>
+    <div class="tip"><b>ポイント：</b>同じスケッチでも<b>職業系統でクセが変わります</b>（威力↑／射程↑／自己ガード／周囲回復）。図鑑コンプ（◯/7）を目指そう！</div>
+  </div>
+
+  <h2>🪙 お金とポーション</h2>
+  <div class="card">
+    <p>敵を倒すと<b>コイン</b>がドロップ（ボスは大量）。<b>🛒ショップ</b>ボタンから<b>ポーション（40コイン）</b>を買えます。
+    ピンチのときは <span class="key">P</span> または 🧪ボタンで飲めば <b>HPが40%回復</b>！</p>
+  </div>
+
+  <h2>📜 クエスト</h2>
+  <div class="card">
+    <p>各マップにいる<b>しおりの妖精</b>の吹き出しをタップして<b>「うける」→ 討伐 →「ほうこく」</b>で報酬。
+    クエストを追っていけば、自然と適正レベルのマップへ進めます（全19クエスト、最後はラスボス討伐）。</p>
+  </div>
+
+  <h2>👹 ボス戦のコツ</h2>
+  <div class="card">
+    <p>各ステージの奥にはボスがいます。ボスは<b>約1秒の「構え（赤い危険範囲＋！）」</b>のあとに強力な特殊攻撃を出します。</p>
+    <ul>
+      <li><b>赤い円</b>が出たら → 範囲スタンプ！円の外へ逃げる</li>
+      <li><b>赤い横バー</b>が出たら → 突進！ジャンプか横に避ける</li>
+    </ul>
+    <div class="tip"><b>チャンス：</b>構え中はボスが止まります。そこを叩こう。強い仲間（＝レベルとポーション）を用意して挑もう！</div>
+  </div>
+
+  <h2>💡 こまったら</h2>
+  <div class="card">
+    <ul>
+      <li><b>台に乗れない</b>→ ハシゴ（<span class="key">↑</span>）で登ろう。ジャンプだけでは届かない足場もあります</li>
+      <li><b>強すぎる</b>→ 手前のマップでレベルを上げてから。転職して装備を整えよう</li>
+      <li><b>死んでも</b>→ もくじ広場で復活。経験値は減りません（カジュアル設計）</li>
+      <li><b>データは自動保存</b>。同じ端末・同じブラウザで開けば続きから遊べます</li>
+    </ul>
+  </div>
+
+</div>
+
+<footer>
+  PAGESストーリー 〜描きかけの絵本の国〜<br>
+  BGM: Caketown / Woodland Fantasy by Matthew Pablo (CC-BY) ／ 背景: ansimuz (CC0)<br>
+  <a href="./index.html">▶ ゲームをはじめる</a>
+</footer>
+</body>
+</html>
