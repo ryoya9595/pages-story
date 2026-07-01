@@ -2,7 +2,6 @@ import Phaser from "phaser";
 import { bgm } from "../bgm";
 import { getProfile, setProfile } from "../profile";
 import { ensureHeroVariantSheets } from "../pixelart";
-import { hasSeenOpening } from "./OpeningScene";
 
 // GameScene.heroVariant と同じ並び（見た目プレビュー用）
 const VARIANTS = [
@@ -160,8 +159,8 @@ export class TitleScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     go.on("pointerdown", () => {
       setProfile({ name: name || "", charIdx });
-      // 初回プレイは先にオープニング、2回目以降はそのままゲームへ
-      this.scene.start(hasSeenOpening() ? "game" : "opening");
+      // 冒険開始のたびに、必ず はじまりのお話（オープニング）から
+      this.scene.start("opening");
     });
 
     // はじまりのおはなし（再視聴）
